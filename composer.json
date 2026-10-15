@@ -1,0 +1,41 @@
+{
+    "name": "sinasaeedi/laravel-runtime-mcp",
+    "description": "A safe, read-only MCP server for a running Laravel app. The server enforces the limits, not the agent.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["laravel", "mcp", "ai", "agent", "security", "read-only"],
+    "homepage": "https://github.com/sinasaeedi/laravel-runtime-mcp",
+    "authors": [{ "name": "Sina Saeedi", "homepage": "https://github.com/sinasaeedi" }],
+    "require": {
+        "php": "^8.2",
+        "laravel/mcp": "^1.0.2",
+        "illuminate/contracts": "^12.69.0|^13.30.0",
+        "illuminate/support": "^12.69.0|^13.30.0",
+        "illuminate/database": "^12.69.0|^13.30.0",
+        "illuminate/console": "^12.69.0|^13.30.0",
+        "illuminate/http": "^12.69.0|^13.30.0",
+        "illuminate/routing": "^12.69.0|^13.30.0",
+        "illuminate/log": "^12.69.0|^13.30.0",
+        "illuminate/queue": "^12.69.0|^13.30.0"
+    },
+    "require-dev": {
+        "guzzlehttp/promises": "^2.0.3|^3.0",
+        "orchestra/testbench": "^10.8|^11.0",
+        "pestphp/pest": "^3.8|^4.0",
+        "pestphp/pest-plugin-laravel": "^3.0|^4.0",
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.20"
+    },
+    "autoload": { "psr-4": { "SinaSaeedi\\RuntimeMcp\\": "src/" } },
+    "autoload-dev": { "psr-4": { "SinaSaeedi\\RuntimeMcp\\Tests\\": "tests/" } },
+    "extra": { "laravel": { "providers": ["SinaSaeedi\\RuntimeMcp\\RuntimeMcpServiceProvider"] } },
+    "scripts": {
+        "test": "pest",
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "format": "pint",
+        "check": ["pint --test", "@analyse", "@test"]
+    },
+    "config": { "sort-packages": true, "allow-plugins": { "pestphp/pest-plugin": true } },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
