@@ -1,0 +1,50 @@
+# Test databases for the integration groups. Dev and CI only; not shipped (.gitattributes).
+# Start them with: docker compose up -d --wait   (or name one service: ... --wait pgsql)
+services:
+  pgsql:
+    image: postgres:17
+    ports: ["55432:5432"]
+    environment:
+      POSTGRES_DB: runtime_mcp
+      POSTGRES_PASSWORD: secret
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d runtime_mcp"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  mysql:
+    image: mysql:8.4
+    ports: ["53306:3306"]
+    environment:
+      MYSQL_DATABASE: runtime_mcp
+      MYSQL_ROOT_PASSWORD: secret
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-psecret"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  mariadb:
+    image: mariadb:11.4
+    ports: ["53307:3306"]
+    environment:
+      MARIADB_DATABASE: runtime_mcp
+      MARIADB_ROOT_PASSWORD: secret
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  mariadb10:
+    image: mariadb:10.11
+    ports: ["53308:3306"]
+    environment:
+      MARIADB_DATABASE: runtime_mcp
+      MARIADB_ROOT_PASSWORD: secret
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
