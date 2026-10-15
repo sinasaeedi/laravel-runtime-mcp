@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace SinaSaeedi\RuntimeMcp;
 
 use Illuminate\Support\ServiceProvider;
+use SinaSaeedi\RuntimeMcp\Mcp\McpRoutes;
+use SinaSaeedi\RuntimeMcp\Security\Environment;
 
 class RuntimeMcpServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/runtime-mcp.php', 'runtime-mcp');
+
+        // Spec 4.6, rule 14: scoped, so Octane gets a fresh instance per request.
+        $this->app->scoped(Environment::class);
     }
 
     public function boot(): void
@@ -21,7 +26,12 @@ class RuntimeMcpServiceProvider extends ServiceProvider
             ], 'runtime-mcp-config');
         }
 
-        // Each later concern (the MCP server, the audit channel, boot validation, the commands)
+        // 01-02: the HTTP endpoint. 01-10 adds boot validation in front of this call.
+        if ($this->app->make('config')->get('runtime-mcp.enabled') === true) {
+            $this->app->make(McpRoutes::class)->register();
+        }
+
+        // Each later concern (the audit channel, boot validation, the commands)
         // is registered by the story that builds it. Do not add a "misc" section here.
     }
 }
