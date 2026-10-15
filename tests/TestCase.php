@@ -9,10 +9,23 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Mcp\Server\McpServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 use SinaSaeedi\RuntimeMcp\RuntimeMcpServiceProvider;
+use SinaSaeedi\RuntimeMcp\Tests\Support\McpRequests;
 use SinaSaeedi\RuntimeMcp\Tests\Support\OutboundGuard;
 
 abstract class TestCase extends Orchestra
 {
+    use McpRequests;
+
+    /**
+     * Config that must be in place before the providers boot (01-02). Set it with bootWith().
+     *
+     * @var array<string, mixed>
+     */
+    private array $configBeforeBoot = [];
+
+    /** The environment name for the next boot, or null for phpunit.xml's APP_ENV. */
+    private ?string $environmentBeforeBoot = null;
+
     protected function setUp(): void
     {
         // Before the app boots, so code that runs while the providers boot is covered too.
@@ -90,6 +103,42 @@ abstract class TestCase extends Orchestra
             'prefix' => '',
             'strict' => true,
         ]);
+
+        // Last, so a test's bootWith() values win over the defaults above.
+        foreach ($this->configBeforeBoot as $key => $value) {
+            $config->set($key, $value);
+        }
+
+        if ($this->environmentBeforeBoot !== null) {
+            $environment = $this->environmentBeforeBoot;
+            $app->detectEnvironment(fn (): string => $environment);
+        }
+    }
+
+    /**
+     * Boots a fresh app with this config (and environment) in place before the providers boot.
+     * The values stay for every later refreshApplication() in the same test.
+     *
+     * @param  array<string, mixed>  $config
+     */
+    public function bootWith(array $config = [], ?string $environment = null): void
+    {
+        $this->configBeforeBoot = $config;
+        $this->environmentBeforeBoot = $environment;
+
+        $this->rebootApplication();
+    }
+
+    /**
+     * A fresh app instance with the same bootWith() values, as on a second server behind a load
+     * balancer. refreshApplication() is protected, so Pest closures call this one.
+     */
+    public function rebootApplication(): void
+    {
+        $this->refreshApplication();
+
+        // The new app has a new facade root, so the guard from setUp() must be set again.
+        Http::preventStrayRequests();
     }
 
     private static function variable(string $name, string $default): string
