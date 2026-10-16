@@ -83,6 +83,8 @@ jobs:
       # Composer 2.9+ will not install an insecure version, so a lower floor could not be proved here.
       # composer.json also sets a dev floor for guzzlehttp/promises (^2.0.3): with Composer < 2.9,
       # --prefer-lowest picks 1.5.3, whose PromiseInterface::wait() does not match Laravel's FluentPromise.
+      # monolog/monolog is ^3.10 (Laravel 12 allows 3.0): before 3.10 a long-lived process keeps
+      # writing to a deleted log file, so audit entries could be lost with no error.
       - name: Install the lowest versions
         run: |
           composer require --dev "laravel/framework:12.*" "orchestra/testbench:^10.8" --no-update --no-interaction

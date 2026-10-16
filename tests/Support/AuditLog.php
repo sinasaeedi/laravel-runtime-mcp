@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SinaSaeedi\RuntimeMcp\Tests\Support;
 
+use Illuminate\Log\LogManager;
+use SinaSaeedi\RuntimeMcp\Audit\AuditChannel;
 use UnexpectedValueException;
 
 /**
@@ -20,11 +22,17 @@ final class AuditLog
         return $files === false ? [] : $files;
     }
 
+    /**
+     * Deletes the files and forgets the cached channel. Before 3.10, Monolog keeps the stream of a
+     * deleted file open, so the next entry would go to the deleted file (the "Lowest" CI job).
+     */
     public static function clear(): void
     {
         foreach (self::files() as $file) {
             unlink($file);
         }
+
+        app(LogManager::class)->forgetChannel(AuditChannel::DEFAULT_NAME);
     }
 
     /** @return list<string> every line of the audit files, in order */
