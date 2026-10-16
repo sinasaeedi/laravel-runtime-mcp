@@ -6,6 +6,7 @@ namespace SinaSaeedi\RuntimeMcp\Server;
 
 use Composer\InstalledVersions;
 use Illuminate\Contracts\Config\Repository;
+use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
 use SinaSaeedi\RuntimeMcp\Security\Environment;
 
 /**
@@ -18,6 +19,7 @@ final class RuntimeServer
     public function __construct(
         private readonly Environment $environment,
         private readonly Repository $config,
+        private readonly PluginRegistry $plugins,
     ) {}
 
     public function name(): string
@@ -46,10 +48,10 @@ final class RuntimeServer
             TEXT;
     }
 
-    /** @return list<never> Empty until 01-03 fills it from the plugin registry (and sets the real type). */
+    /** @return list<class-string> the tools of the active plugins, in registry order (spec 4.2) */
     public function tools(): array
     {
-        return [];
+        return $this->plugins->tools();
     }
 
     private function appName(): string

@@ -6,6 +6,7 @@ namespace SinaSaeedi\RuntimeMcp;
 
 use Illuminate\Support\ServiceProvider;
 use SinaSaeedi\RuntimeMcp\Mcp\McpRoutes;
+use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
 use SinaSaeedi\RuntimeMcp\Security\Environment;
 
 class RuntimeMcpServiceProvider extends ServiceProvider
@@ -16,6 +17,9 @@ class RuntimeMcpServiceProvider extends ServiceProvider
 
         // Spec 4.6, rule 14: scoped, so Octane gets a fresh instance per request.
         $this->app->scoped(Environment::class);
+
+        // Spec 4.2, rule 14: scoped, and it reads the config on every call.
+        $this->app->scoped(PluginRegistry::class);
     }
 
     public function boot(): void

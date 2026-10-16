@@ -8,6 +8,8 @@ use Laravel\Mcp\Enums\CacheScope;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Attributes\Cacheable;
 use Laravel\Mcp\Server\Contracts\Transport;
+use Laravel\Mcp\Server\Tool;
+use LogicException;
 use SinaSaeedi\RuntimeMcp\Server\RuntimeServer;
 
 /**
@@ -27,12 +29,33 @@ final class McpServer extends Server
         $this->name = $definition->name();
         $this->version = $definition->version();
         $this->instructions = $definition->instructions();
-        $this->tools = $definition->tools();
+        $this->tools = $this->toolClasses($definition);
         $this->capabilities = [
             self::CAPABILITY_TOOLS => ['listChanged' => false],
             self::CAPABILITY_PROMPTS => ['listChanged' => false], // spec 5.14, 01-36 fills the list
         ];
         $this->methods = array_intersect_key($this->methods, array_flip(self::METHODS));
+    }
+
+    /**
+     * Spec 4.2: every tool directly, each with an integer key, never under ToolSearch::class
+     * (01-40 adds the operator's catalog switch). 01-08 replaces this with McpToolAdapter instances.
+     *
+     * @return list<class-string<Tool>>
+     */
+    private function toolClasses(RuntimeServer $definition): array
+    {
+        $tools = [];
+
+        foreach ($definition->tools() as $class) {
+            if (! is_subclass_of($class, Tool::class)) {
+                throw new LogicException("[{$class}] is not a laravel/mcp tool.");
+            }
+
+            $tools[] = $class;
+        }
+
+        return $tools;
     }
 
     /**
