@@ -8,6 +8,7 @@ use Illuminate\Support\ServiceProvider;
 use SinaSaeedi\RuntimeMcp\Mcp\McpRoutes;
 use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
 use SinaSaeedi\RuntimeMcp\Security\Environment;
+use SinaSaeedi\RuntimeMcp\Security\Redaction\Redactor;
 
 class RuntimeMcpServiceProvider extends ServiceProvider
 {
@@ -20,6 +21,9 @@ class RuntimeMcpServiceProvider extends ServiceProvider
 
         // Spec 4.2, rule 14: scoped, and it reads the config on every call.
         $this->app->scoped(PluginRegistry::class);
+
+        // Spec 5.6, rule 14: scoped, so extra_patterns is read once per request, never kept across them.
+        $this->app->scoped(Redactor::class);
     }
 
     public function boot(): void
