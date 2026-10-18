@@ -15,6 +15,8 @@ use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use LogicException;
+use SinaSaeedi\RuntimeMcp\Security\Auth\CurrentPrincipal;
+use SinaSaeedi\RuntimeMcp\Security\Authorization\ToolGate;
 use SinaSaeedi\RuntimeMcp\Server\RuntimeServer;
 use SinaSaeedi\RuntimeMcp\Tools\Contracts\RuntimeTool;
 use SinaSaeedi\RuntimeMcp\Tools\GuardPipeline;
@@ -95,10 +97,13 @@ final class McpToolAdapter extends Tool
         return [...parent::toArray(), 'outputSchema' => EnvelopeSchema::toArray()];
     }
 
-    /** 01-09 replaces this with the Gate. */
-    public function shouldRegister(): bool
+    /**
+     * Spec 5.5: hides a tool that the Gate denies from tools/list. laravel/mcp calls it through the
+     * container (Primitive::eligibleForRegistration()). A convenience only: CheckGateStage enforces.
+     */
+    public function shouldRegister(ToolGate $gate, CurrentPrincipal $principals): bool
     {
-        return true;
+        return $gate->decide($principals->get(), $this->tool)->allowed;
     }
 
     /**

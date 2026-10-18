@@ -18,14 +18,21 @@ use Symfony\Component\HttpFoundation\Response;
  */
 final class FixtureTools
 {
-    /** @param  array<string, mixed>  $config  more boot-time config, as for bootWith() */
-    public static function serve(array $config = [], ?string $environment = null): void
+    /**
+     * @param  array<string, mixed>  $config  more boot-time config, as for bootWith()
+     * @param  bool  $gates  allow every fixture tool (01-09); false for the tests of the Gate itself
+     */
+    public static function serve(array $config = [], ?string $environment = null, bool $gates = true): void
     {
         currentTest()->bootWith(['runtime-mcp.enabled' => true, ...$config], $environment);
 
         app()->scoped(PluginRegistry::class, fn (Application $app): PluginRegistry => new PluginRegistry(
             $app, $app->make(Repository::class), [FixtureToolsPlugin::class],
         ));
+
+        if ($gates) {
+            Gates::allowFixtureTools();
+        }
     }
 
     /**

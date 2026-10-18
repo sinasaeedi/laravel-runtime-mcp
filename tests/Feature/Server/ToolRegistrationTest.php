@@ -12,6 +12,7 @@ use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Plugins\FakeBrokenPlugin;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Plugins\FakeOptionalPlugin;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Plugins\FakeSecondPlugin;
 use SinaSaeedi\RuntimeMcp\Tests\Support\AuditLog;
+use SinaSaeedi\RuntimeMcp\Tests\Support\Gates;
 use SinaSaeedi\RuntimeMcp\Tests\Support\ProtocolEra;
 
 // Since 01-08 every tools/call writes an audit entry.
@@ -33,6 +34,8 @@ function serveWithPlugins(array $plugins, array $settings = []): void
     app()->scoped(PluginRegistry::class, fn (Application $app): PluginRegistry => new PluginRegistry(
         $app, $app->make(Repository::class), $plugins,
     ));
+
+    Gates::allowFixtureTools(); // default deny (01-09); the Gate has its own tests
 }
 
 /** @return list<string> */

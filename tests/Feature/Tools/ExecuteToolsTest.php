@@ -9,6 +9,7 @@ use SinaSaeedi\RuntimeMcp\Security\Auth\AuthMethod;
 use SinaSaeedi\RuntimeMcp\Security\Auth\CurrentPrincipal;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Servers\CatalogTestServer;
 use SinaSaeedi\RuntimeMcp\Tests\Support\AuditLog;
+use SinaSaeedi\RuntimeMcp\Tests\Support\Gates;
 use SinaSaeedi\RuntimeMcp\Tests\TestCase;
 
 /*
@@ -17,7 +18,10 @@ use SinaSaeedi\RuntimeMcp\Tests\TestCase;
  * runs the server without HTTP (spec 3.2 "Testing"), so the test binds the principal itself.
  */
 
-beforeEach(fn () => AuditLog::clear());
+beforeEach(function () {
+    AuditLog::clear();
+    Gates::allowFixtureTools(); // default deny (01-09)
+});
 afterEach(fn () => AuditLog::clear());
 
 /** The execute_tools meta-tool, found on the server by its name. */
@@ -60,17 +64,16 @@ it('drops the structured text copy inside the batch, and keeps the label', funct
         ->assertDontSee('\"environment\":\"testing\",\"status\":\"ok\"');
 });
 
-it('denies the first inner call without a principal, and the batch stops there', function () {
+it('refuses the first inner call without a principal before the pipeline, and the batch stops there', function () {
+    // Since 01-09, shouldRegister() asks the Gate, and with no principal it hides every tool.
+    // ToolSearch::invokeTool() checks eligibleForRegistration() before ToolInvoker (ToolSearch.php:
+    // 191-192), so laravel/mcp refuses the call and our pipeline never sees it: no audit entry.
+    // The package never registers ToolSearch in v1.0.0; 01-40 audits this path. The pipeline's own
+    // no_principal denial is proved without the catalog (DirectInvokerTest I1).
     CatalogTestServer::tool(executeToolsByName(), executeToolsTwoCalls())
         ->assertHasErrors()
-        ->assertSee('No authenticated principal.');
-
-    $entries = AuditLog::entries();
+        ->assertSee('Tool [echo] is not available.');
 
     // execute_tools stops at the first result with isError (ToolSearch.php:142-144, spec 5.17).
-    expect($entries)->toHaveCount(1)
-        ->and($entries[0]['tool'])->toBe('echo')
-        ->and($entries[0]['decision'])->toBe('denied')
-        ->and($entries[0]['reason'])->toBe('no_principal')
-        ->and($entries[0]['principal'])->toBeNull();
+    expect(AuditLog::entries())->toBe([]);
 });
