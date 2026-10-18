@@ -26,4 +26,8 @@ enum Reason: string
     case GateDenied = 'gate_denied';
     case GateError = 'gate_error';
     case RateLimited = 'rate_limited';
+
+    // The tools/call handler and model Policies (01-09).
+    case UnknownTool = 'unknown_tool';
+    case PolicyDenied = 'policy_denied';
 }
