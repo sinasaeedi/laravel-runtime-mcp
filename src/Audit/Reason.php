@@ -16,6 +16,7 @@ enum Reason: string
     case UnsupportedScheme = 'unsupported_scheme';
     case UnknownKey = 'unknown_key';
     case LinkedUserMissing = 'linked_user_missing';
+    case UnsupportedAuthDriver = 'unsupported_auth_driver';
     case BadHost = 'bad_host';
     case BadOrigin = 'bad_origin';
 
