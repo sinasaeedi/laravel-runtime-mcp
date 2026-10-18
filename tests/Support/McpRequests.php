@@ -16,11 +16,23 @@ trait McpRequests
 
     public const LEGACY_VERSION = '2025-11-25';
 
+    /** The default key of every HTTP test (01-06): 'rmcp_' + base64url of 32 bytes of 0x01. */
+    public const TEST_KEY = 'rmcp_AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE';
+
+    public const TEST_KEY_NAME = 'tests';
+
+    /** The RUNTIME_MCP_API_KEYS value that holds TEST_KEY. bootWith() sets it unless a test overrides it. */
+    public static function defaultKeyEntry(): string
+    {
+        return self::TEST_KEY_NAME.':'.hash('sha256', self::TEST_KEY);
+    }
+
     private int $mcpRequestId = 0;
 
     /**
      * @param  array<string, mixed>  $params
      * @param  array<string, string>  $headers  extra headers; they win over the ones added here
+     * @param  string|null  $key  sent as "Authorization: Bearer <key>"; null sends no Authorization header
      * @return TestResponse<Response>
      */
     public function mcpPost(
@@ -29,8 +41,13 @@ trait McpRequests
         array $headers = [],
         ProtocolEra $era = ProtocolEra::Legacy,
         string $path = '/mcp',
+        ?string $key = self::TEST_KEY,
     ): TestResponse {
         $base = ['Accept' => 'application/json, text/event-stream'];
+
+        if ($key !== null) {
+            $base['Authorization'] = 'Bearer '.$key;
+        }
 
         if ($era === ProtocolEra::Modern) {
             $meta = is_array($params['_meta'] ?? null) ? $params['_meta'] : [];

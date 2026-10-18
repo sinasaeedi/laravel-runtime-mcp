@@ -9,10 +9,15 @@ use Illuminate\Support\Facades\Route;
 use Laravel\Mcp\Facades\Mcp;
 use Laravel\Mcp\Server\Middleware\AddWwwAuthenticateHeader;
 use SinaSaeedi\RuntimeMcp\Mcp\Http\EnsureEndpointEnabled;
+use SinaSaeedi\RuntimeMcp\Security\Auth\ApiKey;
+use SinaSaeedi\RuntimeMcp\Security\Auth\AuthenticateApiKey;
 
 final class McpRoutes
 {
     public const ROUTE_NAME = 'runtime-mcp';
+
+    /** The STDIO handle: php artisan mcp:start runtime-mcp. */
+    public const LOCAL_HANDLE = 'runtime-mcp';
 
     public function __construct(private readonly Repository $config) {}
 
@@ -33,7 +38,7 @@ final class McpRoutes
             EnsureEndpointEnabled::class,
             // 01-07 inserts EnsureAllowedHostAndOrigin here
             ...$configured,
-            // 01-06 inserts AuthenticateApiKey here
+            AuthenticateApiKey::class, // 01-35 replaces it with AuthenticateRequest
         ];
     }
 
@@ -45,9 +50,17 @@ final class McpRoutes
         return is_string($path) && trim($path, '/ ') !== '' ? $path : null;
     }
 
-    /** Registers the HTTP route. A bad path or middleware entry registers nothing (fail closed). */
+    /**
+     * Registers the STDIO server, then the HTTP route. A bad path or middleware entry registers no
+     * route (fail closed); those are HTTP settings, so STDIO is registered before that check.
+     */
     public function register(): void
     {
+        // Spec 5.3: unset (or not a valid name) = the STDIO server does not start. 01-10 adds its flag.
+        if (ApiKey::isValidName($this->config->get('runtime-mcp.auth.stdio_principal'))) {
+            Mcp::local(self::LOCAL_HANDLE, McpServer::class);
+        }
+
         $middleware = $this->middleware();
         $path = $this->path();
 

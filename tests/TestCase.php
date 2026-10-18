@@ -117,13 +117,14 @@ abstract class TestCase extends Orchestra
 
     /**
      * Boots a fresh app with this config (and environment) in place before the providers boot.
-     * The values stay for every later refreshApplication() in the same test.
+     * The values stay for every later refreshApplication() in the same test. The API keys hold the
+     * default test key (01-06), unless $config sets runtime-mcp.auth.api_keys itself.
      *
      * @param  array<string, mixed>  $config
      */
     public function bootWith(array $config = [], ?string $environment = null): void
     {
-        $this->configBeforeBoot = $config;
+        $this->configBeforeBoot = ['runtime-mcp.auth.api_keys' => self::defaultKeyEntry(), ...$config];
         $this->environmentBeforeBoot = $environment;
 
         $this->rebootApplication();

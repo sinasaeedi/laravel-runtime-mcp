@@ -9,8 +9,11 @@ use Laravel\Mcp\Server\Middleware\ReorderJsonAccept;
 use Laravel\Mcp\Server\Middleware\ValidateMcpHeaders;
 use SinaSaeedi\RuntimeMcp\Mcp\Http\EnsureEndpointEnabled;
 use SinaSaeedi\RuntimeMcp\Mcp\McpServer;
+use SinaSaeedi\RuntimeMcp\Security\Auth\AuthenticateApiKey;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Answer401;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\PassThrough;
+use SinaSaeedi\RuntimeMcp\Tests\Support\AuditLog;
+use SinaSaeedi\RuntimeMcp\Tests\TestCase;
 
 it('registers nothing while the endpoint is off (the default)', function () {
     $response = currentTest()->mcpPost('initialize')->assertNotFound();
@@ -32,11 +35,25 @@ it('registers the route at the configured path', function (string $path, string 
     'custom' => ['/internal/mcp', 'internal/mcp'],
 ]);
 
-it('answers 405 to GET and DELETE', function () {
+it('answers 405 to GET and DELETE with a key', function () {
     currentTest()->bootWith(['runtime-mcp.enabled' => true]);
+    $key = ['Authorization' => 'Bearer '.TestCase::TEST_KEY];
 
-    currentTest()->get('/mcp')->assertStatus(405)->assertHeader('Allow', 'POST');
-    currentTest()->delete('/mcp')->assertStatus(405)->assertHeader('Allow', 'POST');
+    currentTest()->get('/mcp', $key)->assertStatus(405)->assertHeader('Allow', 'POST');
+    currentTest()->delete('/mcp', [], $key)->assertStatus(405)->assertHeader('Allow', 'POST');
+});
+
+// 01-06: GET and DELETE sit in the same route group, so auth runs first.
+it('answers 401 to GET and DELETE without a key', function () {
+    currentTest()->bootWith(['runtime-mcp.enabled' => true]);
+    AuditLog::clear();
+
+    try {
+        currentTest()->get('/mcp')->assertUnauthorized();
+        currentTest()->delete('/mcp')->assertUnauthorized();
+    } finally {
+        AuditLog::clear();
+    }
 });
 
 it('registers nothing for a bad path or middleware entry (fail closed)', function (string $key, mixed $value) {
@@ -60,6 +77,7 @@ it('runs our middleware before laravel/mcp and drops AddWwwAuthenticateHeader', 
     expect(app('router')->gatherRouteMiddleware($route))->toBe([
         EnsureEndpointEnabled::class,
         PassThrough::class,
+        AuthenticateApiKey::class,
         ReorderJsonAccept::class,
         ValidateMcpHeaders::class,
     ]);

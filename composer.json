@@ -9,6 +9,7 @@
     "require": {
         "php": "^8.2",
         "laravel/mcp": "^1.0.2",
+        "illuminate/auth": "^12.69.0|^13.30.0",
         "illuminate/contracts": "^12.69.0|^13.30.0",
         "illuminate/support": "^12.69.0|^13.30.0",
         "illuminate/database": "^12.69.0|^13.30.0",
