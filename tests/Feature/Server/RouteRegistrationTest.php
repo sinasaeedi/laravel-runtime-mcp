@@ -10,6 +10,7 @@ use Laravel\Mcp\Server\Middleware\ValidateMcpHeaders;
 use SinaSaeedi\RuntimeMcp\Mcp\Http\EnsureEndpointEnabled;
 use SinaSaeedi\RuntimeMcp\Mcp\McpServer;
 use SinaSaeedi\RuntimeMcp\Security\Auth\AuthenticateApiKey;
+use SinaSaeedi\RuntimeMcp\Security\Http\EnsureAllowedHostAndOrigin;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Answer401;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\PassThrough;
 use SinaSaeedi\RuntimeMcp\Tests\Support\AuditLog;
@@ -76,6 +77,7 @@ it('runs our middleware before laravel/mcp and drops AddWwwAuthenticateHeader', 
 
     expect(app('router')->gatherRouteMiddleware($route))->toBe([
         EnsureEndpointEnabled::class,
+        EnsureAllowedHostAndOrigin::class, // 01-07
         PassThrough::class,
         AuthenticateApiKey::class,
         ReorderJsonAccept::class,

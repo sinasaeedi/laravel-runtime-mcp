@@ -6,6 +6,7 @@ namespace SinaSaeedi\RuntimeMcp\Tests;
 
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Uri;
 use Laravel\Mcp\Server\McpServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 use SinaSaeedi\RuntimeMcp\RuntimeMcpServiceProvider;
@@ -140,6 +141,28 @@ abstract class TestCase extends Orchestra
 
         // The new app has a new facade root, so the guard from setUp() must be set again.
         Http::preventStrayRequests();
+    }
+
+    /**
+     * A relative URI goes to app.url (https://app.test), the host that 01-07 allows by default.
+     * Without this, every test request goes to http://localhost: Testbench builds its console
+     * request before defineEnvironment() sets app.url. A full URL (https://evil.example/mcp) is sent
+     * as it is. That is the only way to choose the Host in a test: Request::create() overwrites a
+     * Host header with the host of the URL.
+     *
+     * @param  Uri|string  $uri
+     */
+    protected function prepareUrlForRequest($uri): string
+    {
+        $uri = $uri instanceof Uri ? $uri->value() : $uri;
+
+        if (str_contains($uri, '://')) {
+            return $uri;
+        }
+
+        $root = config('app.url');
+
+        return (is_string($root) ? rtrim($root, '/') : '').'/'.ltrim($uri, '/');
     }
 
     private static function variable(string $name, string $default): string
