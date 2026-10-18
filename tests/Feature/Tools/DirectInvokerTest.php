@@ -12,6 +12,7 @@ use SinaSaeedi\RuntimeMcp\Security\Auth\AuthMethod;
 use SinaSaeedi\RuntimeMcp\Security\Auth\CurrentPrincipal;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Tools\EchoTool;
 use SinaSaeedi\RuntimeMcp\Tests\Support\AuditLog;
+use SinaSaeedi\RuntimeMcp\Tests\Support\Gates;
 
 /*
  * Rule 3: the pipeline lives in the tool, not in HTTP middleware. A direct ToolInvoker call (no
@@ -19,7 +20,10 @@ use SinaSaeedi\RuntimeMcp\Tests\Support\AuditLog;
  * as Server::runMethodHandle() does, so the test binds it too.
  */
 
-beforeEach(fn () => AuditLog::clear());
+beforeEach(function () {
+    AuditLog::clear();
+    Gates::allowFixtureTools(); // default deny (01-09)
+});
 afterEach(function () {
     app()->forgetInstance('mcp.request');
     AuditLog::clear();

@@ -10,5 +10,6 @@ it('has the stable reason codes of v1.0.0', function () {
         'missing_credentials', 'blank_credentials', 'unsupported_scheme', 'unknown_key',
         'linked_user_missing', 'unsupported_auth_driver', 'bad_host', 'bad_origin',
         'no_principal', 'no_gate', 'gate_denied', 'gate_error', 'rate_limited',
+        'unknown_tool', 'policy_denied',
     ]);
 });
