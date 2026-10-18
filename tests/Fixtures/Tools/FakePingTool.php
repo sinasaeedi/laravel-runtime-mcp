@@ -4,19 +4,42 @@ declare(strict_types=1);
 
 namespace SinaSaeedi\RuntimeMcp\Tests\Fixtures\Tools;
 
-use Laravel\Mcp\Request;
-use Laravel\Mcp\Response;
-use Laravel\Mcp\Server\Tool;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use SinaSaeedi\RuntimeMcp\Tools\Contracts\RuntimeTool;
+use SinaSaeedi\RuntimeMcp\Tools\Tier;
+use SinaSaeedi\RuntimeMcp\Tools\ToolInput;
+use SinaSaeedi\RuntimeMcp\Tools\ToolResult;
 
-/** A plain laravel/mcp tool for the registration tests (01-03). 01-08 moves fixtures to RuntimeTool. */
-final class FakePingTool extends Tool
+/** A tool with no arguments, for the registration tests (01-03). */
+final class FakePingTool extends RuntimeTool
 {
-    protected string $name = 'fake_ping';
-
-    protected string $description = 'A test tool.';
-
-    public function handle(Request $request): Response
+    public function name(): string
     {
-        return Response::text('pong');
+        return 'fake_ping';
+    }
+
+    public function description(): string
+    {
+        return 'A test tool.';
+    }
+
+    public function tier(): Tier
+    {
+        return Tier::Read;
+    }
+
+    public function schema(JsonSchema $schema): array
+    {
+        return [];
+    }
+
+    public function rules(): array
+    {
+        return [];
+    }
+
+    public function execute(ToolInput $input): ToolResult
+    {
+        return ToolResult::ok(['reply' => 'pong']);
     }
 }

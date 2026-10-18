@@ -27,7 +27,7 @@ interface Plugin
     /** Every tool name of this plugin starts with this, for example "queue_". */
     public function toolPrefix(): string;
 
-    /** @return list<class-string> the tool classes this plugin registers (01-08 tightens the type) */
+    /** @return list<class-string> the RuntimeTool classes this plugin registers; McpServer refuses any other class (01-08) */
     public function tools(): array;
 
     /** True when its tools read the database: boot validation then needs database.connection (spec 5.11, 01-10). */

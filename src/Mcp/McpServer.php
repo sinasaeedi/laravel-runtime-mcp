@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace SinaSaeedi\RuntimeMcp\Mcp;
 
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Contracts\Container\Container;
 use Laravel\Mcp\Enums\CacheScope;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Attributes\Cacheable;
 use Laravel\Mcp\Server\Contracts\Transport;
-use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Transport\StdioTransport;
 use LogicException;
 use SinaSaeedi\RuntimeMcp\Security\Auth\ApiKey;
@@ -17,6 +17,7 @@ use SinaSaeedi\RuntimeMcp\Security\Auth\AuthMethod;
 use SinaSaeedi\RuntimeMcp\Security\Auth\CurrentPrincipal;
 use SinaSaeedi\RuntimeMcp\Security\Auth\PrincipalResolver;
 use SinaSaeedi\RuntimeMcp\Server\RuntimeServer;
+use SinaSaeedi\RuntimeMcp\Tools\Contracts\RuntimeTool;
 
 /**
  * The only subclass of laravel/mcp's Server. Built per request by Registrar::startServer().
@@ -34,6 +35,7 @@ final class McpServer extends Server
         Repository $config,
         PrincipalResolver $resolver,
         CurrentPrincipal $principals,
+        Container $container,
     ) {
         parent::__construct($transport);
 
@@ -46,7 +48,7 @@ final class McpServer extends Server
         $this->name = $definition->name();
         $this->version = $definition->version();
         $this->instructions = $definition->instructions();
-        $this->tools = $this->toolClasses($definition);
+        $this->tools = self::adapters($definition, $container);
         $this->capabilities = [
             self::CAPABILITY_TOOLS => ['listChanged' => false],
             self::CAPABILITY_PROMPTS => ['listChanged' => false], // spec 5.14, 01-36 fills the list
@@ -68,23 +70,26 @@ final class McpServer extends Server
 
     /**
      * Spec 4.2: every tool directly, each with an integer key, never under ToolSearch::class
-     * (01-40 adds the operator's catalog switch). 01-08 replaces this with McpToolAdapter instances.
+     * (01-40 adds the operator's catalog switch). Each tool is wrapped in its own McpToolAdapter,
+     * the only object laravel/mcp ever calls (spec 4.4).
      *
-     * @return list<class-string<Tool>>
+     * @return list<McpToolAdapter>
      */
-    private function toolClasses(RuntimeServer $definition): array
+    private static function adapters(RuntimeServer $definition, Container $container): array
     {
-        $tools = [];
+        $adapters = [];
 
         foreach ($definition->tools() as $class) {
-            if (! is_subclass_of($class, Tool::class)) {
-                throw new LogicException("[{$class}] is not a laravel/mcp tool.");
+            $tool = $container->make($class);
+
+            if (! $tool instanceof RuntimeTool) {
+                throw new LogicException("[{$class}] is not a RuntimeTool.");
             }
 
-            $tools[] = $class;
+            $adapters[] = new McpToolAdapter($tool, $container);
         }
 
-        return $tools;
+        return $adapters;
     }
 
     /**

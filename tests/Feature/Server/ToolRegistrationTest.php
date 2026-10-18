@@ -4,13 +4,19 @@ declare(strict_types=1);
 
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Support\Facades\Exceptions;
 use SinaSaeedi\RuntimeMcp\Plugins\Contracts\Plugin;
 use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Plugins\FakeBasePlugin;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Plugins\FakeBrokenPlugin;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Plugins\FakeOptionalPlugin;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Plugins\FakeSecondPlugin;
+use SinaSaeedi\RuntimeMcp\Tests\Support\AuditLog;
 use SinaSaeedi\RuntimeMcp\Tests\Support\ProtocolEra;
+
+// Since 01-08 every tools/call writes an audit entry.
+beforeEach(fn () => AuditLog::clear());
+afterEach(fn () => AuditLog::clear());
 
 /**
  * Boots the endpoint with these plugins in the registry. laravel/mcp builds McpServer (and so
@@ -65,7 +71,9 @@ it('calls a registered tool directly', function (ProtocolEra $era) {
 
     currentTest()->mcpPost('tools/call', ['name' => 'fake_ping', 'arguments' => (object) []], era: $era)
         ->assertOk()
-        ->assertJsonPath('result.content.0.text', 'pong');
+        ->assertJsonPath('result.isError', false)
+        ->assertJsonPath('result.structuredContent.status', 'ok')
+        ->assertJsonPath('result.structuredContent.data.reply', 'pong');
 })->with([ProtocolEra::Legacy, ProtocolEra::Modern]);
 
 it('neither lists nor calls the tool of an enabled plugin whose package is missing', function () {
@@ -88,9 +96,12 @@ it('follows a config change on the next request', function () {
 
 it('fails the request, and lists nothing, when a plugin names a class that is not a tool', function () {
     serveWithPlugins([FakeBasePlugin::class, FakeBrokenPlugin::class]);
+    Exceptions::fake();
 
     $response = currentTest()->mcpPost('tools/list');
 
     $response->assertStatus(500);
     expect($response->json('result'))->toBeNull();
+
+    Exceptions::assertReported(fn (LogicException $e): bool => $e->getMessage() === '[stdClass] is not a RuntimeTool.');
 });

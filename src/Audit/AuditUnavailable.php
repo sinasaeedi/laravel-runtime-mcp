@@ -9,7 +9,7 @@ use Throwable;
 
 /**
  * The audit entry could not be written, so the tool call must not return its result (spec 5.7,
- * fail closed). 01-08 turns it into an error result.
+ * fail closed). The audit stage (01-08) turns it into an error result that withholds the data.
  *
  * The message is fixed. Never copy the previous message: when Monolog cannot open or write the
  * file, its message repeats the whole log context (Monolog\Utils::getRecordMessageForException()).
