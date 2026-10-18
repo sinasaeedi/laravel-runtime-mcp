@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 namespace SinaSaeedi\RuntimeMcp\Mcp;
 
+use Illuminate\Contracts\Config\Repository;
 use Laravel\Mcp\Enums\CacheScope;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Attributes\Cacheable;
 use Laravel\Mcp\Server\Contracts\Transport;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Transport\StdioTransport;
 use LogicException;
+use SinaSaeedi\RuntimeMcp\Security\Auth\ApiKey;
+use SinaSaeedi\RuntimeMcp\Security\Auth\AuthMethod;
+use SinaSaeedi\RuntimeMcp\Security\Auth\CurrentPrincipal;
+use SinaSaeedi\RuntimeMcp\Security\Auth\PrincipalResolver;
 use SinaSaeedi\RuntimeMcp\Server\RuntimeServer;
 
 /**
@@ -22,9 +28,20 @@ final class McpServer extends Server
         'initialize', 'ping', 'server/discover', 'tools/list', 'tools/call', 'prompts/list', 'prompts/get',
     ];
 
-    public function __construct(Transport $transport, RuntimeServer $definition)
-    {
+    public function __construct(
+        Transport $transport,
+        RuntimeServer $definition,
+        Repository $config,
+        PrincipalResolver $resolver,
+        CurrentPrincipal $principals,
+    ) {
         parent::__construct($transport);
+
+        // Spec 5.3: the STDIO server runs as auth.stdio_principal. Only the mcp:start process gets a
+        // StdioTransport; over HTTP, AuthenticateApiKey has set the principal before this runs.
+        if ($transport instanceof StdioTransport) {
+            $principals->set($resolver->resolve(self::stdioPrincipal($config), AuthMethod::Stdio));
+        }
 
         $this->name = $definition->name();
         $this->version = $definition->version();
@@ -35,6 +52,18 @@ final class McpServer extends Server
             self::CAPABILITY_PROMPTS => ['listChanged' => false], // spec 5.14, 01-36 fills the list
         ];
         $this->methods = array_intersect_key($this->methods, array_flip(self::METHODS));
+    }
+
+    /** Defence in depth for a cached registration: never run STDIO without a valid principal name. */
+    private static function stdioPrincipal(Repository $config): string
+    {
+        $name = $config->get('runtime-mcp.auth.stdio_principal');
+
+        if (! ApiKey::isValidName($name)) {
+            throw new LogicException('The STDIO server needs a valid auth.stdio_principal.');
+        }
+
+        return $name;
     }
 
     /**
