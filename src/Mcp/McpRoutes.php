@@ -11,6 +11,7 @@ use Laravel\Mcp\Server\Middleware\AddWwwAuthenticateHeader;
 use SinaSaeedi\RuntimeMcp\Mcp\Http\EnsureEndpointEnabled;
 use SinaSaeedi\RuntimeMcp\Security\Auth\ApiKey;
 use SinaSaeedi\RuntimeMcp\Security\Auth\AuthenticateApiKey;
+use SinaSaeedi\RuntimeMcp\Security\Http\EnsureAllowedHostAndOrigin;
 
 final class McpRoutes
 {
@@ -36,7 +37,7 @@ final class McpRoutes
 
         return [
             EnsureEndpointEnabled::class,
-            // 01-07 inserts EnsureAllowedHostAndOrigin here
+            EnsureAllowedHostAndOrigin::class, // spec 5.4: before the operator's rules and auth
             ...$configured,
             AuthenticateApiKey::class, // 01-35 replaces it with AuthenticateRequest
         ];

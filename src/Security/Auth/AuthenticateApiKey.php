@@ -64,15 +64,7 @@ final class AuthenticateApiKey
         $token = trim(substr($value, $length));
 
         if (strcasecmp($scheme, 'Bearer') !== 0) {
-            // No space at all: the value is a bare credential (a client that forgot "Bearer "), so
-            // not one character of it is logged.
-            $logged = match (true) {
-                $length === strlen($value) => self::SCHEME_NONE,
-                preg_match(self::SCHEME_PATTERN, $scheme) === 1 => $scheme,
-                default => self::SCHEME_INVALID,
-            };
-
-            return $this->reject($request, Reason::UnsupportedScheme, AuthMethod::ApiKey, ['scheme' => $logged]);
+            return $this->reject($request, Reason::UnsupportedScheme, AuthMethod::ApiKey, ['scheme' => self::schemeWord($value)]);
         }
 
         $bearer = ['scheme' => 'Bearer'];
@@ -96,6 +88,26 @@ final class AuthenticateApiKey
         $this->principals->set($principal);
 
         return $next($request);
+    }
+
+    /**
+     * The first word of an Authorization value, safe to log (01-06, and 01-07 for a refused host or
+     * origin): "Bearer" for any case of bearer; "[none]" when the value has no space or tab (a bare
+     * credential, a client that forgot "Bearer "); the word when it matches SCHEME_PATTERN; else
+     * "[invalid]". Never one character of the credential.
+     */
+    public static function schemeWord(string $value): string
+    {
+        $value = trim($value);
+        $length = strcspn($value, " \t");
+        $scheme = substr($value, 0, $length);
+
+        return match (true) {
+            strcasecmp($scheme, 'Bearer') === 0 => 'Bearer',
+            $length === strlen($value) => self::SCHEME_NONE,
+            preg_match(self::SCHEME_PATTERN, $scheme) === 1 => $scheme,
+            default => self::SCHEME_INVALID,
+        };
     }
 
     /** @param  array<string, string>  $details */
