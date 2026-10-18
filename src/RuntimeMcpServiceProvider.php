@@ -9,6 +9,7 @@ use SinaSaeedi\RuntimeMcp\Audit\AuditChannel;
 use SinaSaeedi\RuntimeMcp\Audit\AuditLogger;
 use SinaSaeedi\RuntimeMcp\Mcp\McpRoutes;
 use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
+use SinaSaeedi\RuntimeMcp\Security\Auth\CurrentPrincipal;
 use SinaSaeedi\RuntimeMcp\Security\Environment;
 use SinaSaeedi\RuntimeMcp\Security\Redaction\Redactor;
 
@@ -29,6 +30,9 @@ class RuntimeMcpServiceProvider extends ServiceProvider
 
         // Spec 5.7, rule 14: scoped; it resolves the Redactor and the log on every call.
         $this->app->scoped(AuditLogger::class);
+
+        // Spec 4.4 step 1, 5.13, rule 14: scoped, so a principal never outlives its request.
+        $this->app->scoped(CurrentPrincipal::class);
     }
 
     public function boot(): void
@@ -46,7 +50,7 @@ class RuntimeMcpServiceProvider extends ServiceProvider
             $this->app->storagePath('logs/runtime-mcp.log'),
         );
 
-        // 01-02: the HTTP endpoint. 01-10 adds boot validation in front of this call.
+        // 01-02: the HTTP endpoint; 01-06: the STDIO server. 01-10 adds boot validation in front of this call.
         if ($this->app->make('config')->get('runtime-mcp.enabled') === true) {
             $this->app->make(McpRoutes::class)->register();
         }
