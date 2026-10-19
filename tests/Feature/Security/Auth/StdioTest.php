@@ -11,6 +11,7 @@ use SinaSaeedi\RuntimeMcp\Mcp\McpServer;
 use SinaSaeedi\RuntimeMcp\Security\Auth\AuthMethod;
 use SinaSaeedi\RuntimeMcp\Security\Auth\CurrentPrincipal;
 use SinaSaeedi\RuntimeMcp\Security\Auth\LinkedUserMissing;
+use SinaSaeedi\RuntimeMcp\Tests\Support\BootCapture;
 use SinaSaeedi\RuntimeMcp\Tests\Support\Users;
 
 /*
@@ -33,13 +34,15 @@ it('does not start the STDIO server without a valid stdio_principal', function (
 ]);
 
 it('registers the STDIO server for a valid stdio_principal, without API keys', function () {
-    currentTest()->bootWith([
-        'runtime-mcp.enabled' => true,
+    // 01-10: no keys is then a warning (recorded here, so laravel.log gets no line), and no HTTP route.
+    $boot = BootCapture::boot([
         'runtime-mcp.auth.stdio_principal' => 'local-dev',
         'runtime-mcp.auth.api_keys' => null,
     ]);
 
-    expect(Mcp::getLocalServer('runtime-mcp'))->toBeCallable();
+    expect(Mcp::getLocalServer('runtime-mcp'))->toBeCallable()
+        ->and(Route::has('runtime-mcp'))->toBeFalse()
+        ->and($boot->warnings())->toHaveCount(1);
 });
 
 it('needs the endpoint to be enabled', function () {

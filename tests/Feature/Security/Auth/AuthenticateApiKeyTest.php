@@ -132,12 +132,6 @@ it('rejects with the reason in the audit only', function (
     'Bearer after another scheme' => ['Basic x, Bearer '.TestCase::TEST_KEY, [], Reason::UnsupportedScheme, AuthMethod::ApiKey, ['scheme' => 'Basic']],
     'wrong key' => ['Bearer rmcp_'.'wrong', [], Reason::UnknownKey, AuthMethod::ApiKey, ['scheme' => 'Bearer']],
     'a key of another server' => ['Bearer '.authApiKeyOther(), [], Reason::UnknownKey, AuthMethod::ApiKey, ['scheme' => 'Bearer']],
-    'the right key in a ring with a malformed entry' => [
-        'Bearer '.TestCase::TEST_KEY,
-        ['runtime-mcp.auth.api_keys' => TestCase::defaultKeyEntry().',sina:abc'],
-        Reason::UnknownKey, AuthMethod::ApiKey, ['scheme' => 'Bearer'],
-    ],
-    'no keys at all' => ['Bearer '.TestCase::TEST_KEY, ['runtime-mcp.auth.api_keys' => null], Reason::UnknownKey, AuthMethod::ApiKey, ['scheme' => 'Bearer']],
     'the key is linked to a missing user' => [
         'Bearer '.TestCase::TEST_KEY,
         ['runtime-mcp.auth.link_users' => ['tests' => 'nobody@example.com']],
@@ -147,6 +141,26 @@ it('rejects with the reason in the audit only', function (
     'driver sanctum before 01-35' => ['Bearer '.TestCase::TEST_KEY, ['runtime-mcp.auth.driver' => 'sanctum'], Reason::UnsupportedAuthDriver, null, ['driver' => 'sanctum']],
     'driver with a long name' => ['Bearer '.TestCase::TEST_KEY, ['runtime-mcp.auth.driver' => str_repeat('d', 30)], Reason::UnsupportedAuthDriver, null, ['driver' => str_repeat('d', 20)]],
     'driver not a string' => ['Bearer '.TestCase::TEST_KEY, ['runtime-mcp.auth.driver' => ['api_key']], Reason::UnsupportedAuthDriver, null, []],
+])->with([ProtocolEra::Legacy, ProtocolEra::Modern]);
+
+// 01-10: an empty or malformed ring fails boot validation (no route, or a throw in `testing`), so
+// these two cases change the ring after boot, as a cached route meets a config change. The ring is
+// read per request, so the right key is still refused: 01-06's second lock.
+it('rejects the right key when the ring turns empty or malformed after boot', function (mixed $keys, ProtocolEra $era) {
+    currentTest()->bootWith(['runtime-mcp.enabled' => true]);
+    config(['runtime-mcp.auth.api_keys' => $keys]);
+    Event::fake([AuthFailed::class]);
+
+    authApiKeyAssertRejected(authApiKeyPost('Bearer '.TestCase::TEST_KEY, $era));
+
+    $entry = AuditLog::entries()[0] ?? [];
+    expect($entry['reason'] ?? null)->toBe(Reason::UnknownKey->value)
+        ->and($entry['auth_method'] ?? null)->toBe(AuthMethod::ApiKey->value)
+        ->and($entry['details'] ?? null)->toBe(['scheme' => 'Bearer']);
+    Event::assertDispatchedTimes(AuthFailed::class, 1);
+})->with([
+    'the right key in a ring with a malformed entry' => [TestCase::defaultKeyEntry().',sina:abc'],
+    'no keys at all' => [null],
 ])->with([ProtocolEra::Legacy, ProtocolEra::Modern]);
 
 it('sends our header, not laravel/mcp\'s, also when the app uses Mcp::oauthRoutes()', function () {
