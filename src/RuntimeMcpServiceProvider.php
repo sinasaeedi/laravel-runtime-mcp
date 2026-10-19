@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SinaSaeedi\RuntimeMcp;
 
+use Illuminate\Contracts\Config\Repository;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
 use SinaSaeedi\RuntimeMcp\Audit\AuditChannel;
 use SinaSaeedi\RuntimeMcp\Audit\AuditLogger;
@@ -13,6 +15,9 @@ use SinaSaeedi\RuntimeMcp\Security\Auth\CurrentPrincipal;
 use SinaSaeedi\RuntimeMcp\Security\Boot\BootGuard;
 use SinaSaeedi\RuntimeMcp\Security\Boot\BootState;
 use SinaSaeedi\RuntimeMcp\Security\Environment;
+use SinaSaeedi\RuntimeMcp\Security\Grants\ColumnMask;
+use SinaSaeedi\RuntimeMcp\Security\Grants\DeniedTables;
+use SinaSaeedi\RuntimeMcp\Security\Grants\RoleSqlGenerator;
 use SinaSaeedi\RuntimeMcp\Security\Redaction\Redactor;
 
 class RuntimeMcpServiceProvider extends ServiceProvider
@@ -39,6 +44,20 @@ class RuntimeMcpServiceProvider extends ServiceProvider
         // Spec 5.11 (01-10): a singleton, not scoped. It holds the boot report of this app instance;
         // under Octane the provider boots once per worker (no request data, rule 14).
         $this->app->singleton(BootState::class);
+
+        // Spec 7.1 (01-11): bind, not singleton or scoped. It reads the config on each make(), and
+        // make() throws InvalidGrantConfig for a malformed list. Boot never resolves it (spec 5.11).
+        $this->app->bind(RoleSqlGenerator::class, function (Application $app): RoleSqlGenerator {
+            $config = $app->make(Repository::class);
+            $appName = $config->get('app.name');
+
+            return new RoleSqlGenerator(
+                ColumnMask::fromConfig($config),
+                DeniedTables::fromConfig($config),
+                is_string($appName) ? $appName : '',
+                $app->make(Environment::class)->name(),
+            );
+        });
     }
 
     public function boot(): void
