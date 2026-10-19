@@ -4,18 +4,25 @@ declare(strict_types=1);
 
 namespace SinaSaeedi\RuntimeMcp\Tests;
 
+use Closure;
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Foundation\Application;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Uri;
 use Laravel\Mcp\Server\McpServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 use SinaSaeedi\RuntimeMcp\RuntimeMcpServiceProvider;
+use SinaSaeedi\RuntimeMcp\Security\Boot\BootThrottle;
 use SinaSaeedi\RuntimeMcp\Tests\Support\McpRequests;
 use SinaSaeedi\RuntimeMcp\Tests\Support\OutboundGuard;
 
 abstract class TestCase extends Orchestra
 {
     use McpRequests;
+
+    /** The read-only connection of every bootWith() (01-10): it exists and is not the default. Boot never opens it. */
+    public const READ_ONLY_CONNECTION = 'testing_readonly';
 
     /**
      * Config that must be in place before the providers boot (01-02). Set it with bootWith().
@@ -27,6 +34,9 @@ abstract class TestCase extends Orchestra
     /** The environment name for the next boot, or null for phpunit.xml's APP_ENV. */
     private ?string $environmentBeforeBoot = null;
 
+    /** @var (Closure(Application): void)|null runs after every provider's register(), before any boot() (01-10) */
+    private ?Closure $beforeBoot = null;
+
     protected function setUp(): void
     {
         // Before the app boots, so code that runs while the providers boot is covered too.
@@ -35,11 +45,13 @@ abstract class TestCase extends Orchestra
         parent::setUp();
 
         Http::preventStrayRequests();
+        $this->clearBootThrottle();
     }
 
     protected function tearDown(): void
     {
         try {
+            $this->clearBootThrottle();
             parent::tearDown();
         } finally {
             OutboundGuard::uninstall();
@@ -49,7 +61,7 @@ abstract class TestCase extends Orchestra
     /**
      * Testbench ignores package discovery by default, so list both providers.
      *
-     * @param  \Illuminate\Foundation\Application  $app
+     * @param  Application  $app
      * @return list<class-string<\Illuminate\Support\ServiceProvider>>
      */
     protected function getPackageProviders($app): array
@@ -61,7 +73,7 @@ abstract class TestCase extends Orchestra
     }
 
     /**
-     * @param  \Illuminate\Foundation\Application  $app
+     * @param  Application  $app
      */
     protected function defineEnvironment($app): void
     {
@@ -77,6 +89,12 @@ abstract class TestCase extends Orchestra
             'database' => ':memory:',
             'prefix' => '',
             'foreign_key_constraints' => true,
+        ]);
+
+        $config->set('database.connections.'.self::READ_ONLY_CONNECTION, [
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+            'prefix' => '',
         ]);
 
         $config->set('database.connections.testing_pgsql', [
@@ -114,19 +132,33 @@ abstract class TestCase extends Orchestra
             $environment = $this->environmentBeforeBoot;
             $app->detectEnvironment(fn (): string => $environment);
         }
+
+        if ($this->beforeBoot !== null) {
+            $app->booting($this->beforeBoot);
+        }
     }
 
     /**
      * Boots a fresh app with this config (and environment) in place before the providers boot.
      * The values stay for every later refreshApplication() in the same test. The API keys hold the
-     * default test key (01-06), unless $config sets runtime-mcp.auth.api_keys itself.
+     * default test key (01-06) and database.connection names READ_ONLY_CONNECTION (01-10), unless
+     * $config sets them itself (null = unset).
+     *
+     * $beforeBoot runs after every provider's register() and before any boot(): bind a recorder or a
+     * fake there to see what happens while the providers boot (tests/Support/BootCapture).
      *
      * @param  array<string, mixed>  $config
+     * @param  (Closure(Application): void)|null  $beforeBoot
      */
-    public function bootWith(array $config = [], ?string $environment = null): void
+    public function bootWith(array $config = [], ?string $environment = null, ?Closure $beforeBoot = null): void
     {
-        $this->configBeforeBoot = ['runtime-mcp.auth.api_keys' => self::defaultKeyEntry(), ...$config];
+        $this->configBeforeBoot = [
+            'runtime-mcp.auth.api_keys' => self::defaultKeyEntry(),
+            'runtime-mcp.database.connection' => self::READ_ONLY_CONNECTION,
+            ...$config,
+        ];
         $this->environmentBeforeBoot = $environment;
+        $this->beforeBoot = $beforeBoot;
 
         $this->rebootApplication();
     }
@@ -163,6 +195,22 @@ abstract class TestCase extends Orchestra
         $root = config('app.url');
 
         return (is_string($root) ? rtrim($root, '/') : '').'/'.ltrim($uri, '/');
+    }
+
+    /**
+     * The boot throttle writes files under the skeleton's storage; a file left by one test would
+     * silence the same report in the next one.
+     */
+    private function clearBootThrottle(): void
+    {
+        if ($this->app === null) {
+            return;
+        }
+
+        $path = $this->app->storagePath(BootThrottle::DIRECTORY);
+
+        // A test of a broken store puts a plain file there.
+        File::isFile($path) ? File::delete($path) : File::deleteDirectory($path);
     }
 
     private static function variable(string $name, string $default): string

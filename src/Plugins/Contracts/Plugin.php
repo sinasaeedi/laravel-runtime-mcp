@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SinaSaeedi\RuntimeMcp\Plugins\Contracts;
 
+use SinaSaeedi\RuntimeMcp\Security\Boot\BootRule;
+
 /**
  * Spec 4.2: one group of tools that the operator turns on in runtime-mcp.plugins.
  *
@@ -33,7 +35,7 @@ interface Plugin
     /** True when its tools read the database: boot validation then needs database.connection (spec 5.11, 01-10). */
     public function requiresReadOnlyConnection(): bool;
 
-    /** @return list<object> extra boot validation rules (01-10 types them as BootRule) */
+    /** @return list<BootRule> extra boot validation rules; they run only while the plugin is active (01-10) */
     public function bootRules(): array;
 
     /** @return list<class-string> the prompt classes this plugin registers (spec 5.14; 01-36 types them) */
