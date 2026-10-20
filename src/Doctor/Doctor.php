@@ -16,6 +16,7 @@ use SinaSaeedi\RuntimeMcp\Doctor\Checks\Endpoint;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\LinkedUsers;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\MaskLists;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\Plugins;
+use SinaSaeedi\RuntimeMcp\Doctor\Checks\ReadOnlyRolePrivileges;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\RedactionPatterns;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\Route;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\StdioPrincipal;
@@ -32,8 +33,8 @@ use Throwable;
 final class Doctor
 {
     /**
-     * The core checks, in report order. Later stories append: 01-13 (ReadOnlyRolePrivileges),
-     * 01-14 (StatementTimeout), 01-16 (ReadOnlyTransactionConnections), 01-17 (Limits),
+     * The core checks, in report order. 01-13 added ReadOnlyRolePrivileges (spec 5.1); later stories
+     * append: 01-14 (StatementTimeout), 01-16 (ReadOnlyTransactionConnections), 01-17 (Limits),
      * 01-35 (Sanctum), 01-40 (Catalog).
      */
     public const CHECKS = [
@@ -47,6 +48,7 @@ final class Doctor
         AllowedOrigins::class,
         RedactionPatterns::class,
         MaskLists::class,
+        ReadOnlyRolePrivileges::class,
         Plugins::class,
         AuditLog::class,
     ];

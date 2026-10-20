@@ -31,7 +31,14 @@ it('refuses a 2026-07-28 request without the Mcp-Method header', function () {
         ->assertStatus(400)->assertJsonPath('error.code', -32020);
 });
 
-it('refuses protocol version 2025-03-26', function () {
-    currentTest()->mcpPost('tools/list', headers: ['MCP-Protocol-Version' => '2025-03-26'])
+it('accepts protocol version 2025-03-26 through initialize (laravel/mcp 1.1.0)', function () {
+    currentTest()->mcpPost('initialize', ['protocolVersion' => '2025-03-26'])
+        ->assertOk()->assertJsonPath('result.protocolVersion', '2025-03-26');
+
+    expect(currentTest()->mcpPost('tools/list', headers: ['MCP-Protocol-Version' => '2025-03-26'])->assertOk()->json('result.tools'))->toBe([]);
+});
+
+it('refuses protocol version 2024-11-05', function () {
+    currentTest()->mcpPost('tools/list', headers: ['MCP-Protocol-Version' => '2024-11-05'])
         ->assertStatus(400)->assertJsonPath('error.code', -32022);
 });

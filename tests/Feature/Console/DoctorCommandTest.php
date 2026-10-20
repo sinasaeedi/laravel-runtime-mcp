@@ -20,6 +20,13 @@ use SinaSaeedi\RuntimeMcp\Tests\TestCase;
  * reads the message as a second needle (01-04 trap).
  */
 
+/*
+ * The test read-only connection (testing_readonly) is SQLite, so with the database or models plugin on,
+ * the Read-only role check (01-13) fails. A test that counts lines or expects exit 0 turns both off; the
+ * check then passes with "Not needed".
+ */
+const NO_DATABASE_PLUGINS = ['runtime-mcp.plugins.database' => false, 'runtime-mcp.plugins.models' => false];
+
 /** @return array{int, string} the exit code and the whole output */
 function callDoctorCommand(): array
 {
@@ -29,14 +36,14 @@ function callDoctorCommand(): array
 }
 
 it('prints a healthy strict report: the header, a pass line per core check, exit 0', function () {
-    currentTest()->bootWith(['runtime-mcp.enabled' => true], 'production');
+    currentTest()->bootWith(['runtime-mcp.enabled' => true, ...NO_DATABASE_PLUGINS], 'production');
 
     [$code, $output] = callDoctorCommand();
     $version = app(RuntimeServer::class)->version();
 
     expect($code)->toBe(0)
         ->and($output)->toContain("Runtime MCP doctor — Runtime Test (production), strict, package {$version}")
-        ->and(substr_count($output, '✓'))->toBe(12)
+        ->and(substr_count($output, '✓'))->toBe(13)
         ->and(str_contains($output, '✗'))->toBeFalse()
         ->and(str_contains($output, '→'))->toBeFalse()
         ->and($output)->toContain('✓ Endpoint')
@@ -53,7 +60,7 @@ it('says relaxed in the header of a relaxed environment', function () {
 });
 
 it('prints a failure with its fix on the next line, and exits 1', function () {
-    currentTest()->bootWith(['runtime-mcp.enabled' => true, 'runtime-mcp.redaction.extra_patterns' => ['/ok/', '/(unclosed/']], 'production');
+    currentTest()->bootWith(['runtime-mcp.enabled' => true, ...NO_DATABASE_PLUGINS, 'runtime-mcp.redaction.extra_patterns' => ['/ok/', '/(unclosed/']], 'production');
 
     [$code, $output] = callDoctorCommand();
 
@@ -63,7 +70,7 @@ it('prints a failure with its fix on the next line, and exits 1', function () {
 });
 
 it('exits 1 for a boot rule failure in a strict environment, and says the endpoint stays off', function () {
-    currentTest()->bootWith(['runtime-mcp.enabled' => true, 'runtime-mcp.auth.api_keys' => null], 'production');
+    currentTest()->bootWith(['runtime-mcp.enabled' => true, ...NO_DATABASE_PLUGINS, 'runtime-mcp.auth.api_keys' => null], 'production');
 
     [$code, $output] = callDoctorCommand();
 
@@ -75,7 +82,7 @@ it('exits 1 for a boot rule failure in a strict environment, and says the endpoi
 });
 
 it('runs every rule when the endpoint is off: a warning for the endpoint, and still exit 1', function () {
-    currentTest()->bootWith(['runtime-mcp.enabled' => false, 'runtime-mcp.auth.api_keys' => null], 'production');
+    currentTest()->bootWith(['runtime-mcp.enabled' => false, ...NO_DATABASE_PLUGINS, 'runtime-mcp.auth.api_keys' => null], 'production');
 
     [$code, $output] = callDoctorCommand();
 
@@ -87,7 +94,7 @@ it('runs every rule when the endpoint is off: a warning for the endpoint, and st
 });
 
 it('exits 0 with warnings only', function () {
-    currentTest()->bootWith(['runtime-mcp.enabled' => true, 'runtime-mcp.plugins.horizon' => true], 'production');
+    currentTest()->bootWith(['runtime-mcp.enabled' => true, ...NO_DATABASE_PLUGINS, 'runtime-mcp.plugins.horizon' => true], 'production');
 
     [$code, $output] = callDoctorCommand();
 
@@ -108,7 +115,7 @@ it('exits 0 in a relaxed environment with database.connection unset: the boot ru
 });
 
 it('warns, exit 0, for empty keys with a STDIO principal', function () {
-    currentTest()->bootWith(['runtime-mcp.enabled' => true, 'runtime-mcp.auth.api_keys' => null, 'runtime-mcp.auth.stdio_principal' => 'local-dev'], 'production');
+    currentTest()->bootWith(['runtime-mcp.enabled' => true, ...NO_DATABASE_PLUGINS, 'runtime-mcp.auth.api_keys' => null, 'runtime-mcp.auth.stdio_principal' => 'local-dev'], 'production');
 
     [$code, $output] = callDoctorCommand();
 
