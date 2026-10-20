@@ -95,6 +95,18 @@ it('only warns on api_keys.present when a valid STDIO principal is set', functio
     ]]);
 });
 
+it('fails api_keys.present for a key-shaped STDIO principal, and never names it (01-12)', function () {
+    $key = 'rmcp_'.str_repeat('A', 43);
+
+    $issues = bootRulesFlat(bootRulesCheck(ApiKeysPresent::class, [
+        'runtime-mcp.auth.api_keys' => null,
+        'runtime-mcp.auth.stdio_principal' => $key,
+    ]));
+
+    expect($issues)->toBe([['api_keys.present', 'error', ApiKeysPresent::ERROR]])
+        ->and(str_contains(json_encode($issues, JSON_THROW_ON_ERROR), $key))->toBeFalse();
+});
+
 it('tells the developer how to get past the relaxed throw in the api_keys.present error', function () {
     expect(ApiKeysPresent::ERROR)->toBe(
         'RUNTIME_MCP_API_KEYS is empty. Create a key with `php artisan runtime-mcp:key <name>` '

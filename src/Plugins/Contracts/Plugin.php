@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SinaSaeedi\RuntimeMcp\Plugins\Contracts;
 
+use SinaSaeedi\RuntimeMcp\Doctor\Check;
 use SinaSaeedi\RuntimeMcp\Security\Boot\BootRule;
 
 /**
@@ -37,6 +38,9 @@ interface Plugin
 
     /** @return list<BootRule> extra boot validation rules; they run only while the plugin is active (01-10) */
     public function bootRules(): array;
+
+    /** @return list<Check> extra doctor checks; they run only while the plugin is active (01-12) */
+    public function doctorChecks(): array;
 
     /** @return list<class-string> the prompt classes this plugin registers (spec 5.14; 01-36 types them) */
     public function prompts(): array;

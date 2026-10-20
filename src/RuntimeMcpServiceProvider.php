@@ -9,6 +9,7 @@ use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
 use SinaSaeedi\RuntimeMcp\Audit\AuditChannel;
 use SinaSaeedi\RuntimeMcp\Audit\AuditLogger;
+use SinaSaeedi\RuntimeMcp\Console\DoctorCommand;
 use SinaSaeedi\RuntimeMcp\Mcp\McpRoutes;
 use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
 use SinaSaeedi\RuntimeMcp\Security\Auth\CurrentPrincipal;
@@ -66,6 +67,9 @@ class RuntimeMcpServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__.'/../config/runtime-mcp.php' => $this->app->configPath('runtime-mcp.php'),
             ], 'runtime-mcp-config');
+
+            // Spec 7.3 (01-12).
+            $this->commands([DoctorCommand::class]);
         }
 
         // Spec 5.7: the audit channel, unless the app defines it. Before the enabled check: the

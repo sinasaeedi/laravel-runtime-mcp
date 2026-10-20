@@ -37,6 +37,11 @@ abstract class AbstractPlugin implements Plugin
         return [];
     }
 
+    public function doctorChecks(): array
+    {
+        return [];
+    }
+
     public function prompts(): array
     {
         return [];

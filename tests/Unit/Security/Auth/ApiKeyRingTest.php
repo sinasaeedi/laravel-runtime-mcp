@@ -46,6 +46,7 @@ it('reports malformed segments by position and then matches nothing', function (
     'third field' => [apiKeyRingEntry('sina', 'a').':extra', [1]],
     'name too long' => [str_repeat('a', 65).':'.ApiKey::hash(apiKeyRingKey('a')), [1]],
     'two bad ones' => ['x,'.apiKeyRingEntry('sina', 'a').',y', [1, 3]],
+    'a key as the name (01-12)' => [apiKeyRingEntry('sina', 'a').',rmcp_'.str_repeat('A', 43).':'.ApiKey::hash(apiKeyRingKey('a')), [2]],
 ]);
 
 it('treats a non-string value as one malformed segment', function (mixed $value) {
