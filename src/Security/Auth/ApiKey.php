@@ -35,13 +35,18 @@ final class ApiKey
     }
 
     /**
-     * A valid name is never empty. ("string" here would tell PHPStan that false means "not a
-     * string", which is wrong.)
+     * A valid name is never empty. The "=" narrows only for true: a non-empty string can still be
+     * invalid, so false must not mean "not a non-empty string" (a plain assert would say so).
      *
-     * @phpstan-assert-if-true non-empty-string $name
+     * A name never starts with the key prefix, in any case (01-12): a key pasted as a name matches
+     * NAME_PATTERN, and the name is written to every audit entry and event, and to the boot log.
+     *
+     * @phpstan-assert-if-true =non-empty-string $name
      */
     public static function isValidName(mixed $name): bool
     {
-        return is_string($name) && preg_match(self::NAME_PATTERN, $name) === 1;
+        return is_string($name)
+            && preg_match(self::NAME_PATTERN, $name) === 1
+            && stripos($name, self::PREFIX) !== 0;
     }
 }
