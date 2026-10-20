@@ -49,7 +49,8 @@ final class ApiKeyRing
                 continue; // a trailing comma or ", ," is harmless
             }
 
-            if (preg_match(ApiKey::ENTRY_PATTERN, $segment, $match) !== 1) {
+            // The name is the principal: a key-shaped name is malformed too (01-12, isValidName()).
+            if (preg_match(ApiKey::ENTRY_PATTERN, $segment, $match) !== 1 || ! ApiKey::isValidName($match[1])) {
                 $this->malformed[] = $index + 1;
 
                 continue;
