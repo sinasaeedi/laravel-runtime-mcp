@@ -31,6 +31,7 @@ it('does not start the STDIO server without a valid stdio_principal', function (
     'space' => 'local dev',
     'trailing newline' => "local-dev\n",
     'not a string' => [['local-dev']],
+    'a key (01-12)' => 'rmcp_'.str_repeat('A', 43),
 ]);
 
 it('registers the STDIO server for a valid stdio_principal, without API keys', function () {

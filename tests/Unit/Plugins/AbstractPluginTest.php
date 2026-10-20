@@ -28,5 +28,6 @@ it('gives a plugin the safe defaults: off, no package, nothing registered', func
         ->and($plugin->tools())->toBe([])
         ->and($plugin->requiresReadOnlyConnection())->toBeFalse()
         ->and($plugin->bootRules())->toBe([])
+        ->and($plugin->doctorChecks())->toBe([])
         ->and($plugin->prompts())->toBe([]);
 });

@@ -42,6 +42,8 @@ it('accepts a valid key name', function (string $name) {
     'dash' => 'local-dev',
     'all allowed characters' => 'a.b_c-1',
     '64 characters' => str_repeat('a', 64),
+    'the prefix later in the name' => 'ops-rmcp_bot',
+    'the prefix without its underscore' => 'rmcp',
 ]);
 
 it('refuses a bad key name', function (mixed $name) {
@@ -56,4 +58,7 @@ it('refuses a bad key name', function (mixed $name) {
     'null' => null,
     'int' => 5,
     'array' => [['sina']],
+    'the key prefix (01-12)' => 'rmcp_bot',
+    'the key prefix in upper case' => 'RMCP_bot',
+    'a whole key' => 'rmcp_'.str_repeat('A', 43),
 ]);
