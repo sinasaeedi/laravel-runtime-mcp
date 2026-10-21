@@ -7,7 +7,6 @@ use SinaSaeedi\RuntimeMcp\Doctor\CheckResult;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\AllowedHosts;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\AllowedOrigins;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\AuditLog;
-use SinaSaeedi\RuntimeMcp\Doctor\Checks\AuthDriver;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\BootRules;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\Endpoint;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\LinkedUsers;
@@ -84,28 +83,6 @@ it('Boot rules: a warning issue is a warn, in rule order after the errors before
     ]);
 });
 
-it('Auth driver: passes for api_key', function () {
-    currentTest()->bootWith();
-
-    expect(runCoreCheck(AuthDriver::class))->toBe([['pass', 'auth.driver is `api_key`.', null]]);
-});
-
-it('Auth driver: fails for any other driver, and prints only a name-like value', function (mixed $driver, string $shown) {
-    currentTest()->bootWith(['runtime-mcp.auth.driver' => $driver]);
-
-    expect(runCoreCheck(AuthDriver::class))->toBe([[
-        'fail',
-        "auth.driver is {$shown}, so every request is refused. This version supports only `api_key`.",
-        'Set runtime-mcp.auth.driver to `api_key`.',
-    ]]);
-})->with([
-    'sanctum (until 01-35)' => ['sanctum', '`sanctum`'],
-    'passport' => ['passport', '`passport`'],
-    'not a name' => ['Bad Driver!', 'not a driver name'],
-    'not a string' => [5, 'not a driver name'],
-    'null' => [null, 'not a driver name'],
-]);
-
 it('Linked users: passes with no link', function (mixed $links) {
     currentTest()->bootWith(['runtime-mcp.auth.link_users' => $links]);
 
@@ -177,6 +154,26 @@ it('Linked users: reports a broken user provider once, with its class only', fun
         'Check auth.defaults.guard, its user provider, and that the users table exists.',
     ]]);
 });
+
+// 01-35: only the api_key driver links keys to users, so with another driver no link is resolved.
+it('Linked users: passes with Not used for another driver and no link', function (mixed $driver) {
+    currentTest()->bootWith(['runtime-mcp.auth.driver' => $driver]);
+
+    expect(runCoreCheck(LinkedUsers::class))->toBe([['pass', 'Not used: auth.driver is not `api_key`.', null]]);
+})->with(['sanctum', 'passport']);
+
+it('Linked users: only warns for a link with another driver, and resolves none', function (mixed $links) {
+    currentTest()->bootWith(['runtime-mcp.auth.driver' => 'sanctum', 'runtime-mcp.auth.link_users' => $links]);
+
+    expect(runCoreCheck(LinkedUsers::class))->toBe([[
+        'warn',
+        'auth.link_users has no effect: only the api_key driver links keys to users.',
+        'Remove auth.link_users, or set it to [].',
+    ]]);
+})->with([
+    'a link to a missing user' => [[TestCase::TEST_KEY_NAME => 'nobody@example.com']],
+    'not an array' => ['x'],
+]);
 
 it('STDIO principal: passes when unset or a valid name', function (mixed $principal, string $message) {
     currentTest()->bootWith(['runtime-mcp.auth.stdio_principal' => $principal]);
@@ -500,7 +497,7 @@ it('every core result has a fix unless it passes', function () {
         'runtime-mcp.plugins.horizon' => true,
     ]);
 
-    foreach ([Endpoint::class, AuthDriver::class, LinkedUsers::class, StdioPrincipal::class, Route::class, AllowedHosts::class, AllowedOrigins::class, RedactionPatterns::class, MaskLists::class, Plugins::class] as $class) {
+    foreach ([Endpoint::class, LinkedUsers::class, StdioPrincipal::class, Route::class, AllowedHosts::class, AllowedOrigins::class, RedactionPatterns::class, MaskLists::class, Plugins::class] as $class) {
         foreach (runCoreCheck($class) as [$status, , $fix]) {
             expect($status)->not->toBe(CheckStatus::Pass->value, $class)
                 ->and($fix)->not->toBeNull($class);

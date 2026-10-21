@@ -137,10 +137,7 @@ it('rejects with the reason in the audit only', function (
         ['runtime-mcp.auth.link_users' => ['tests' => 'nobody@example.com']],
         Reason::LinkedUserMissing, AuthMethod::ApiKey, ['scheme' => 'Bearer'],
     ],
-    'driver passport' => ['Bearer '.TestCase::TEST_KEY, ['runtime-mcp.auth.driver' => 'passport'], Reason::UnsupportedAuthDriver, null, ['driver' => 'passport']],
-    'driver sanctum before 01-35' => ['Bearer '.TestCase::TEST_KEY, ['runtime-mcp.auth.driver' => 'sanctum'], Reason::UnsupportedAuthDriver, null, ['driver' => 'sanctum']],
-    'driver with a long name' => ['Bearer '.TestCase::TEST_KEY, ['runtime-mcp.auth.driver' => str_repeat('d', 30)], Reason::UnsupportedAuthDriver, null, ['driver' => str_repeat('d', 20)]],
-    'driver not a string' => ['Bearer '.TestCase::TEST_KEY, ['runtime-mcp.auth.driver' => ['api_key']], Reason::UnsupportedAuthDriver, null, []],
+    // The driver rows moved to AuthenticateRequestTest (01-35): a bad driver now fails boot validation.
 ])->with([ProtocolEra::Legacy, ProtocolEra::Modern]);
 
 // 01-10: an empty or malformed ring fails boot validation (no route, or a throw in `testing`), so

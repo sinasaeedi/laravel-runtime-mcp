@@ -11,8 +11,10 @@ use SinaSaeedi\RuntimeMcp\Security\Boot\BootIssue;
 use SinaSaeedi\RuntimeMcp\Security\Boot\BootRule;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ApiKeysFormat;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ApiKeysPresent;
+use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\AuthDriver;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\PluginsInstalled;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ReadOnlyConnection;
+use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\SanctumInstalled;
 use SinaSaeedi\RuntimeMcp\Security\BootValidator;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Boot\FailingRule;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Boot\ThrowingRule;
@@ -50,10 +52,12 @@ function bootValidatorIssues(?array $rules = null): array
     );
 }
 
-it('lists the four core rules of v1.0.0, in order', function () {
+it('lists the core rules of v1.0.0, in order', function () {
     expect(BootValidator::RULES)->toBe([
         ApiKeysPresent::class,
         ApiKeysFormat::class,
+        AuthDriver::class, // 01-35
+        SanctumInstalled::class, // 01-35
         ReadOnlyConnection::class,
         PluginsInstalled::class,
     ]);
@@ -136,6 +140,6 @@ it('allows HTTP and STDIO by the driver, the key ring and the STDIO principal', 
     'no keys, a principal (STDIO only)' => [['runtime-mcp.auth.api_keys' => null, 'runtime-mcp.auth.stdio_principal' => 'local-dev'], true, false, true],
     'no keys, no principal' => [['runtime-mcp.auth.api_keys' => null], false, false, false],
     'keys, an invalid principal' => [['runtime-mcp.auth.stdio_principal' => 'local dev'], true, true, false],
-    'driver sanctum, no keys (01-35 adds its rules)' => [['runtime-mcp.auth.driver' => 'sanctum', 'runtime-mcp.auth.api_keys' => null], true, true, false],
+    'driver sanctum, no keys' => [['runtime-mcp.auth.driver' => 'sanctum', 'runtime-mcp.auth.api_keys' => null], true, true, false],
     'a malformed ring' => [['runtime-mcp.auth.api_keys' => 'sina:abc', 'runtime-mcp.auth.stdio_principal' => 'local-dev'], false, false, false],
 ]);

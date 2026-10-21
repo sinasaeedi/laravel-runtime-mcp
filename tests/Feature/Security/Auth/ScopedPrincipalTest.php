@@ -7,6 +7,7 @@ use SinaSaeedi\RuntimeMcp\Security\Auth\ApiKey;
 use SinaSaeedi\RuntimeMcp\Security\Auth\AuthMethod;
 use SinaSaeedi\RuntimeMcp\Security\Auth\CurrentPrincipal;
 use SinaSaeedi\RuntimeMcp\Tests\Support\AuditLog;
+use SinaSaeedi\RuntimeMcp\Tests\Support\Tokens;
 use SinaSaeedi\RuntimeMcp\Tests\TestCase;
 
 /*
@@ -56,4 +57,26 @@ it('gives each request in one worker its own principal', function () {
 
     currentTest()->mcpPost('tools/list', key: $second)->assertOk();
     expect(app(CurrentPrincipal::class)->get()?->name)->toBe('bob');
+});
+
+// 01-35: the same for the sanctum driver (spec 11.2 "Sanctum", rule 14).
+it('gives each Sanctum token in one worker its own principal, and none to the next request', function () {
+    currentTest()->bootWith(Tokens::config());
+    $alice = Tokens::user('alice@example.com');
+    $bob = Tokens::user('bob@example.com');
+    $aliceToken = Tokens::issue($alice);
+    $bobToken = Tokens::issue($bob);
+
+    currentTest()->mcpPost('tools/list', key: $aliceToken)->assertOk();
+    expect(app(CurrentPrincipal::class)->get()?->name)->toBe(Tokens::principalName($alice));
+
+    app()->forgetScopedInstances();
+
+    currentTest()->mcpPost('tools/list', key: $bobToken)->assertOk();
+    expect(app(CurrentPrincipal::class)->get()?->name)->toBe(Tokens::principalName($bob));
+
+    app()->forgetScopedInstances();
+
+    currentTest()->mcpPost('tools/list', key: null)->assertUnauthorized();
+    expect(app(CurrentPrincipal::class)->get())->toBeNull();
 });
