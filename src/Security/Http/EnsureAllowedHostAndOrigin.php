@@ -11,7 +11,7 @@ use Illuminate\Http\Request;
 use SinaSaeedi\RuntimeMcp\Audit\AuditEntry;
 use SinaSaeedi\RuntimeMcp\Audit\AuditLogger;
 use SinaSaeedi\RuntimeMcp\Audit\Reason;
-use SinaSaeedi\RuntimeMcp\Security\Auth\AuthenticateApiKey;
+use SinaSaeedi\RuntimeMcp\Security\Auth\BearerCredential;
 use SinaSaeedi\RuntimeMcp\Security\Environment;
 use Symfony\Component\HttpFoundation\Exception\RequestExceptionInterface;
 use Symfony\Component\HttpFoundation\Response;
@@ -99,7 +99,7 @@ final class EnsureAllowedHostAndOrigin
         $authorization = $request->headers->get('Authorization');
 
         if (is_string($authorization) && trim($authorization) !== '') {
-            $details['scheme'] = AuthenticateApiKey::schemeWord($authorization);
+            $details['scheme'] = BearerCredential::schemeWord($authorization);
         }
 
         // auth_method is null: auth has not run. Never throws (01-05): the 403 still goes out.
