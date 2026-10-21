@@ -16,8 +16,10 @@ use SinaSaeedi\RuntimeMcp\Security\Boot\BootReport;
 use SinaSaeedi\RuntimeMcp\Security\Boot\BootRule;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ApiKeysFormat;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ApiKeysPresent;
+use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\AuthDriver;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\PluginsInstalled;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ReadOnlyConnection;
+use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\SanctumInstalled;
 use Throwable;
 
 /**
@@ -30,12 +32,14 @@ use Throwable;
 final class BootValidator
 {
     /**
-     * The core rules, in run order. Later stories append: 01-35 (auth.*), 01-29 (tools.*),
-     * 01-36 (prompts.*), 01-38 (wrapped_tools.*).
+     * The core rules, in run order. 01-35 added auth.driver and auth.sanctum.installed; later stories
+     * append: 01-29 (tools.*), 01-36 (prompts.*), 01-38 (wrapped_tools.*).
      */
     public const RULES = [
         ApiKeysPresent::class,
         ApiKeysFormat::class,
+        AuthDriver::class,
+        SanctumInstalled::class,
         ReadOnlyConnection::class,
         PluginsInstalled::class,
     ];
@@ -127,7 +131,7 @@ final class BootValidator
         return BootIssue::error($id, "Rule {$id} could not run: ".$e::class.'.');
     }
 
-    /** Spec 5.11: the api_key driver with no key never registers the HTTP route. 01-35 checks the other drivers. */
+    /** Spec 5.11: the api_key driver with no key never registers the HTTP route. The auth.* rules check the other drivers (01-35). */
     private function httpReady(): bool
     {
         return $this->config->get('runtime-mcp.auth.driver') !== 'api_key'
