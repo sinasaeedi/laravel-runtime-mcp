@@ -38,7 +38,7 @@ it('runs the core checks in the order of Doctor::CHECKS', function () {
     currentTest()->bootWith([], 'production');
 
     expect(doctorTitles())->toBe([
-        'Endpoint', 'Boot rules', 'Auth driver', 'Linked users', 'STDIO principal', 'Route',
+        'Endpoint', 'Boot rules', 'Sanctum', 'Linked users', 'STDIO principal', 'Route',
         'Allowed hosts', 'Allowed origins', 'Redaction patterns', 'Mask lists', 'Read-only role', 'Plugins', 'Audit log',
     ])
         ->and(count(Doctor::CHECKS))->toBe(13);

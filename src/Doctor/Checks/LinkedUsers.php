@@ -17,6 +17,8 @@ use SinaSaeedi\RuntimeMcp\Security\Auth\PrincipalResolver;
  * request uses. It queries the users table: doctor may (spec 5.11 keeps queries out of boot only).
  *
  * Names the key, never the email (01-06; Sina, 2026-10-20): a deploy log is often public to a team.
+ * Only the api_key driver links keys to users; with another driver a link has no effect (01-35), so a
+ * link is never resolved there and never fails doctor.
  */
 final class LinkedUsers implements Check
 {
@@ -33,6 +35,15 @@ final class LinkedUsers implements Check
     public function run(): array
     {
         $links = $this->config->get('runtime-mcp.auth.link_users');
+
+        if ($this->config->get('runtime-mcp.auth.driver') !== 'api_key') {
+            return [$links === null || $links === []
+                ? CheckResult::pass('Not used: auth.driver is not `api_key`.')
+                : CheckResult::warn(
+                    'auth.link_users has no effect: only the api_key driver links keys to users.',
+                    'Remove auth.link_users, or set it to [].',
+                )];
+        }
 
         if ($links === null || $links === []) {
             return [CheckResult::pass('No key is linked to a user.')];

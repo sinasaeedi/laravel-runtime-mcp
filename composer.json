@@ -28,7 +28,11 @@
         "pestphp/pest": "^3.8|^4.0",
         "pestphp/pest-plugin-laravel": "^3.0|^4.0",
         "larastan/larastan": "^3.0",
-        "laravel/pint": "^1.20"
+        "laravel/pint": "^1.20",
+        "laravel/sanctum": "^4.1"
+    },
+    "suggest": {
+        "laravel/sanctum": "Needed for auth.driver = sanctum (^4.1)."
     },
     "autoload": { "psr-4": { "SinaSaeedi\\RuntimeMcp\\": "src/" } },
     "autoload-dev": { "psr-4": { "SinaSaeedi\\RuntimeMcp\\Tests\\": "tests/" } },

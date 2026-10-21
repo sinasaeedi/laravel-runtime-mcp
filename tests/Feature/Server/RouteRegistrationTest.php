@@ -9,7 +9,7 @@ use Laravel\Mcp\Server\Middleware\ReorderJsonAccept;
 use Laravel\Mcp\Server\Middleware\ValidateMcpHeaders;
 use SinaSaeedi\RuntimeMcp\Mcp\Http\EnsureEndpointEnabled;
 use SinaSaeedi\RuntimeMcp\Mcp\McpServer;
-use SinaSaeedi\RuntimeMcp\Security\Auth\AuthenticateApiKey;
+use SinaSaeedi\RuntimeMcp\Security\Auth\AuthenticateRequest;
 use SinaSaeedi\RuntimeMcp\Security\Http\EnsureAllowedHostAndOrigin;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Answer401;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\PassThrough;
@@ -79,7 +79,7 @@ it('runs our middleware before laravel/mcp and drops AddWwwAuthenticateHeader', 
         EnsureEndpointEnabled::class,
         EnsureAllowedHostAndOrigin::class, // 01-07
         PassThrough::class,
-        AuthenticateApiKey::class,
+        AuthenticateRequest::class, // 01-35
         ReorderJsonAccept::class,
         ValidateMcpHeaders::class,
     ]);

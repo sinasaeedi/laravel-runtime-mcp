@@ -39,7 +39,7 @@ final class McpServer extends Server
         parent::__construct($transport);
 
         // Spec 5.3: the STDIO server runs as auth.stdio_principal. Only the mcp:start process gets a
-        // StdioTransport; over HTTP, AuthenticateApiKey has set the principal before this runs.
+        // StdioTransport; over HTTP, AuthenticateRequest has set the principal before this runs.
         if ($transport instanceof StdioTransport) {
             $principals->set($resolver->resolve(self::stdioPrincipal($config), AuthMethod::Stdio));
         }

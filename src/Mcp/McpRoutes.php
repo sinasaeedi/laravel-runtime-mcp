@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Route;
 use Laravel\Mcp\Facades\Mcp;
 use Laravel\Mcp\Server\Middleware\AddWwwAuthenticateHeader;
 use SinaSaeedi\RuntimeMcp\Mcp\Http\EnsureEndpointEnabled;
-use SinaSaeedi\RuntimeMcp\Security\Auth\AuthenticateApiKey;
+use SinaSaeedi\RuntimeMcp\Security\Auth\AuthenticateRequest;
 use SinaSaeedi\RuntimeMcp\Security\Http\EnsureAllowedHostAndOrigin;
 
 final class McpRoutes
@@ -38,7 +38,7 @@ final class McpRoutes
             EnsureEndpointEnabled::class,
             EnsureAllowedHostAndOrigin::class, // spec 5.4: before the operator's rules and auth
             ...$configured,
-            AuthenticateApiKey::class, // 01-35 replaces it with AuthenticateRequest
+            AuthenticateRequest::class, // 01-35: picks the api_key or the sanctum driver per request
         ];
     }
 

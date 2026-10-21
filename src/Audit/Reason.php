@@ -20,6 +20,13 @@ enum Reason: string
     case BadHost = 'bad_host';
     case BadOrigin = 'bad_origin';
 
+    // HTTP layer, the sanctum driver (01-35).
+    case UnknownToken = 'unknown_token';
+    case TokenExpired = 'token_expired';
+    case TokenMissingAbility = 'token_missing_ability';
+    case TokenOwnerInvalid = 'token_owner_invalid';
+    case TokenLookupFailed = 'token_lookup_failed';
+
     // Pipeline (01-08, 01-09, 01-17).
     case NoPrincipal = 'no_principal';
     case NoGate = 'no_gate';

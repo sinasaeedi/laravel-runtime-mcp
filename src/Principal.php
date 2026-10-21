@@ -16,11 +16,24 @@ use SinaSaeedi\RuntimeMcp\Security\Auth\AuthMethod;
  */
 final readonly class Principal
 {
+    /** The name prefix of a user principal: the Sanctum driver (01-35) and the test kit's asUser() (01-39). */
+    public const USER_PREFIX = 'user-';
+
     public function __construct(
         public string $name,
         public AuthMethod $method,
         public ?Authenticatable $user = null,
     ) {}
+
+    /**
+     * Spec 5.3: "user-<id>", in the format of a key name (ApiKey::NAME_PATTERN), so the audit and the
+     * rate-limit keys (01-17) have one name format. A character outside [A-Za-z0-9._-] becomes "-", and
+     * the id is cut to 59 characters, so the name is at most 64.
+     */
+    public static function userName(int|string $id): string
+    {
+        return self::USER_PREFIX.substr((string) preg_replace('/[^A-Za-z0-9._-]/', '-', (string) $id), 0, 59);
+    }
 
     /** What Gates and Policies run for: the linked User, or this Principal. */
     public function subject(): Authenticatable|self
