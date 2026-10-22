@@ -40,8 +40,9 @@ it('runs the core checks in the order of Doctor::CHECKS', function () {
     expect(doctorTitles())->toBe([
         'Endpoint', 'Boot rules', 'Sanctum', 'Linked users', 'STDIO principal', 'Route',
         'Allowed hosts', 'Allowed origins', 'Redaction patterns', 'Mask lists', 'Read-only role', 'Plugins', 'Audit log',
+        'Statement timeout',
     ])
-        ->and(count(Doctor::CHECKS))->toBe(13);
+        ->and(count(Doctor::CHECKS))->toBe(14);
 });
 
 it('adds the checks of each active plugin after the core checks', function () {

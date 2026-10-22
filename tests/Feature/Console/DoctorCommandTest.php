@@ -43,12 +43,13 @@ it('prints a healthy strict report: the header, a pass line per core check, exit
 
     expect($code)->toBe(0)
         ->and($output)->toContain("Runtime MCP doctor — Runtime Test (production), strict, package {$version}")
-        ->and(substr_count($output, '✓'))->toBe(13)
+        ->and(substr_count($output, '✓'))->toBe(14)
         ->and(str_contains($output, '✗'))->toBeFalse()
         ->and(str_contains($output, '→'))->toBeFalse()
         ->and($output)->toContain('✓ Endpoint')
         ->and($output)->toContain('RUNTIME_MCP_ENABLED is true.')
         ->and($output)->toContain('Every boot rule passes.')
+        ->and($output)->toContain('Statements time out after 5000 ms.')
         ->and($output)->toContain('Every check passes.')
         ->and(str_contains($output, '<fg='))->toBeFalse();
 });
