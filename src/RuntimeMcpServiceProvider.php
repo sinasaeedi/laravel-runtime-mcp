@@ -20,6 +20,7 @@ use SinaSaeedi\RuntimeMcp\Security\Grants\ColumnMask;
 use SinaSaeedi\RuntimeMcp\Security\Grants\DeniedTables;
 use SinaSaeedi\RuntimeMcp\Security\Grants\RoleSqlGenerator;
 use SinaSaeedi\RuntimeMcp\Security\Redaction\Redactor;
+use SinaSaeedi\RuntimeMcp\Security\Sql\SessionLedger;
 
 class RuntimeMcpServiceProvider extends ServiceProvider
 {
@@ -41,6 +42,10 @@ class RuntimeMcpServiceProvider extends ServiceProvider
 
         // Spec 4.4 step 1, 5.13, rule 14: scoped, so a principal never outlives its request.
         $this->app->scoped(CurrentPrincipal::class);
+
+        // Spec 5.2, 5.13, rule 14 (01-14): scoped, so a read-only mark or a pending session reset never
+        // outlives its request. ReadOnlySession is not bound, so each make() gets this request's ledger.
+        $this->app->scoped(SessionLedger::class);
 
         // Spec 5.11 (01-10): a singleton, not scoped. It holds the boot report of this app instance;
         // under Octane the provider boots once per worker (no request data, rule 14).
