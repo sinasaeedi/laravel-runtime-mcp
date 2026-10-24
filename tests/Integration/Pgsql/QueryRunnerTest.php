@@ -181,7 +181,10 @@ it('QP8 values are made JSON-safe: bytea unread, NaN and Infinity as text, the r
 
     $result = pgsqlRunner("SELECT '\\xdeadbeef'::bytea, 'NaN'::float8, 'Infinity'::float8, '-Infinity'::float8, 1.5::float8, 2, true, 1.50::numeric, NULL");
 
-    expect($result->rows)->toBe([[QueryRunner::BINARY, 'NaN', 'Infinity', '-Infinity', 1.5, 2, true, '1.50', null]])
+    // pdo_pgsql gives float8 as a float from PHP 8.4, as a string before (NaN too, so value() leaves it).
+    $float = PHP_VERSION_ID >= 80400 ? 1.5 : '1.5';
+
+    expect($result->rows)->toBe([[QueryRunner::BINARY, 'NaN', 'Infinity', '-Infinity', $float, 2, true, '1.50', null]])
         ->and(json_encode($result->rows, JSON_THROW_ON_ERROR))->toBeString();
 });
 
