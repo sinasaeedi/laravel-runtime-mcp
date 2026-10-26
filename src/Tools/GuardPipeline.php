@@ -9,6 +9,7 @@ use Illuminate\Pipeline\Pipeline;
 use LogicException;
 use SinaSaeedi\RuntimeMcp\Tools\Pipeline\AuditStage;
 use SinaSaeedi\RuntimeMcp\Tools\Pipeline\CheckGateStage;
+use SinaSaeedi\RuntimeMcp\Tools\Pipeline\ReadOnlyStage;
 use SinaSaeedi\RuntimeMcp\Tools\Pipeline\RedactStage;
 use SinaSaeedi\RuntimeMcp\Tools\Pipeline\ResolvePrincipalStage;
 use SinaSaeedi\RuntimeMcp\Tools\Pipeline\RunTool;
@@ -31,7 +32,7 @@ final class GuardPipeline
         ResolvePrincipalStage::class,    // 1
         CheckGateStage::class,           // 2
         // 01-17 inserts Pipeline\RateLimitStage here (3)
-        // 01-16 inserts Pipeline\ReadOnlyStage here (4 on the way in, 6 on the way out)
+        ReadOnlyStage::class,            // 4 on the way in, 6 on the way out: innermost, around the tool only
     ];
 
     public function __construct(private readonly Container $container) {}
