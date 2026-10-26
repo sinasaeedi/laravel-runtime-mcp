@@ -45,10 +45,9 @@ it('D3 is a plain Fail, not a privilege check: it fails in a relaxed environment
     expect($result->privilege)->toBeFalse();
 });
 
-it('D4 is the last core check, after AuditLog', function () {
+it('D4 is the core check after AuditLog', function () {
     currentTest()->bootWith();
 
-    expect(Doctor::CHECKS[array_key_last(Doctor::CHECKS)])->toBe(StatementTimeout::class)
-        ->and(array_search(StatementTimeout::class, Doctor::CHECKS, true))->toBe(array_search(AuditLog::class, Doctor::CHECKS, true) + 1)
+    expect(array_search(StatementTimeout::class, Doctor::CHECKS, true))->toBe(array_search(AuditLog::class, Doctor::CHECKS, true) + 1)
         ->and(app(StatementTimeout::class)->title())->toBe('Statement timeout');
 });

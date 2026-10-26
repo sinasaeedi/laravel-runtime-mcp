@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace SinaSaeedi\RuntimeMcp;
 
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Database\Events\TransactionCommitting;
+use Illuminate\Database\Events\TransactionRolledBack;
 use Illuminate\Support\ServiceProvider;
 use SinaSaeedi\RuntimeMcp\Audit\AuditChannel;
 use SinaSaeedi\RuntimeMcp\Audit\AuditLogger;
@@ -19,6 +22,8 @@ use SinaSaeedi\RuntimeMcp\Security\Environment;
 use SinaSaeedi\RuntimeMcp\Security\Grants\ColumnMask;
 use SinaSaeedi\RuntimeMcp\Security\Grants\DeniedTables;
 use SinaSaeedi\RuntimeMcp\Security\Grants\RoleSqlGenerator;
+use SinaSaeedi\RuntimeMcp\Security\ReadOnly\RefuseReadOnlyCommit;
+use SinaSaeedi\RuntimeMcp\Security\ReadOnly\ReopenReadOnlyTransaction;
 use SinaSaeedi\RuntimeMcp\Security\Redaction\Redactor;
 use SinaSaeedi\RuntimeMcp\Security\Sql\SessionLedger;
 
@@ -83,6 +88,14 @@ class RuntimeMcpServiceProvider extends ServiceProvider
             $this->app->make('config'),
             $this->app->storagePath('logs/runtime-mcp.log'),
         );
+
+        // Spec 5.9 (01-16, Sina Q1): app code inside a read tool cannot commit the read-only transaction,
+        // and an unbalanced rollback begins a new one (Sina, 2026-10-26). Before the enabled check, like the
+        // audit: the test kit and STDIO run tools too. Both act only on a connection that the request's
+        // SessionLedger marks, so the app's own commits and rollbacks are untouched.
+        $events = $this->app->make(Dispatcher::class);
+        $events->listen(TransactionCommitting::class, RefuseReadOnlyCommit::class);
+        $events->listen(TransactionRolledBack::class, ReopenReadOnlyTransaction::class);
 
         // Spec 5.11: boot validation first (01-10). Strict: a failed rule registers nothing. Relaxed:
         // check() throws. Then 01-02 the HTTP endpoint and 01-06 the STDIO server, each only if allowed.

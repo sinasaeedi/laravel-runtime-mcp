@@ -16,6 +16,7 @@ use SinaSaeedi\RuntimeMcp\Doctor\Checks\LinkedUsers;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\MaskLists;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\Plugins;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\ReadOnlyRolePrivileges;
+use SinaSaeedi\RuntimeMcp\Doctor\Checks\ReadOnlyTransactionConnections;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\RedactionPatterns;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\Route;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\Sanctum;
@@ -36,8 +37,8 @@ final class Doctor
     /**
      * The core checks, in report order. 01-13 added ReadOnlyRolePrivileges (spec 5.1); 01-35 put
      * Sanctum where 01-12's AuthDriver was (the auth.driver boot rule now reports a bad driver in Boot
-     * rules); 01-14 appended StatementTimeout. Later stories append: 01-16
-     * (ReadOnlyTransactionConnections), 01-17 (Limits), 01-40 (Catalog).
+     * rules); 01-14 appended StatementTimeout, 01-16 ReadOnlyTransactionConnections. Later stories
+     * append: 01-17 (Limits), 01-40 (Catalog).
      */
     public const CHECKS = [
         Endpoint::class,
@@ -54,6 +55,7 @@ final class Doctor
         Plugins::class,
         AuditLog::class,
         StatementTimeout::class,
+        ReadOnlyTransactionConnections::class,
     ];
 
     /** @param  list<class-string<Check>>  $checks */
