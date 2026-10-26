@@ -5,13 +5,19 @@ declare(strict_types=1);
 namespace SinaSaeedi\RuntimeMcp\Tools\Pipeline;
 
 use Illuminate\Contracts\Debug\ExceptionHandler;
+use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Contracts\Validation\Factory;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Validation\ValidationException;
+use JsonSerializable;
+use SinaSaeedi\RuntimeMcp\Security\ReadOnly\WriteAttemptExplainer;
+use SinaSaeedi\RuntimeMcp\Security\Redaction\Redactor;
 use SinaSaeedi\RuntimeMcp\Tools\ToolCall;
 use SinaSaeedi\RuntimeMcp\Tools\ToolInput;
 use SinaSaeedi\RuntimeMcp\Tools\ToolOutcome;
+use Stringable;
 use Throwable;
+use UnitEnum;
 
 /**
  * Stage 5 (spec 4.4), the destination of the pipeline: validate the arguments, then run the tool.
@@ -30,6 +36,7 @@ final class RunTool
     public function __construct(
         private readonly Factory $validation,
         private readonly ExceptionHandler $exceptions,
+        private readonly WriteAttemptExplainer $writes,
     ) {}
 
     public function handle(ToolCall $call): ToolOutcome
@@ -51,13 +58,17 @@ final class RunTool
         }
 
         try {
-            return ToolOutcome::success($call->tool->execute(new ToolInput($validated)));
+            $result = $call->tool->execute(new ToolInput($validated));
+
+            // Inside the read-only transaction: redaction (stage 7) runs after the rollback (6).
+            return ToolOutcome::success($result->withContent(self::plain($result->data), $result->note));
         } catch (Throwable $e) {
             // Spec 4.4: the full exception goes to the app's log; the agent gets the class and the
-            // message, which RedactStage redacts on the way out.
+            // message, which RedactStage redacts on the way out. A write that the read-only transaction
+            // blocked gets its own note (01-16).
             $this->exceptions->report($e);
 
-            return ToolOutcome::failed($e, 'The tool failed: '.$e::class.': '.self::cut($e->getMessage()));
+            return ToolOutcome::failed($e, $this->writes->note($e) ?? 'The tool failed: '.$e::class.': '.self::cut($e->getMessage()));
         }
     }
 
@@ -86,6 +97,35 @@ final class RunTool
         }
 
         return $unknown;
+    }
+
+    /**
+     * The data with every object that the redaction engine reads (JsonSerializable, Arrayable,
+     * Stringable) read now. Reading one runs app code, an accessor or a lazy query, which must not run
+     * after the rollback (spec 5.9). Enums stay: reading them runs no app code. Any other object stays,
+     * and the redaction engine refuses it. Depths count as in Redactor.
+     */
+    private static function plain(mixed $value, int $depth = 1): mixed
+    {
+        if ($depth > Redactor::MAX_DEPTH) {
+            return Redactor::UNSUPPORTED;
+        }
+
+        if (is_array($value)) {
+            foreach ($value as $key => $item) {
+                $value[$key] = self::plain($item, $depth + 1);
+            }
+
+            return $value;
+        }
+
+        return match (true) {
+            $value instanceof UnitEnum => $value,
+            $value instanceof JsonSerializable => self::plain($value->jsonSerialize(), $depth + 1),
+            $value instanceof Arrayable => self::plain($value->toArray(), $depth + 1),
+            $value instanceof Stringable => (string) $value,
+            default => $value,
+        };
     }
 
     private static function cut(string $message): string
