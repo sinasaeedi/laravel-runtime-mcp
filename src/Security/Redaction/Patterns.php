@@ -33,7 +33,8 @@ final class Patterns
         // Any other token after "Bearer". "|" is in the class: a Sanctum token is "<id>|<token>".
         'bearer' => '/\bbearer\s+\K[A-Za-z0-9._~+\/=|-]{8,}/i',
         // The password in scheme://user:pass@host. The user may be empty (redis://:pass@host), and the
-        // password may hold "@": the greedy class ends at the last "@" before the host.
-        'password' => '/\b[a-z][a-z0-9+.-]*:\/\/[^\s:\/?#@]*:\K[^\s\/?#]+(?=@)/i',
+        // user and the password may hold "@": the greedy class ends at the last "@" before the host.
+        // ":\/\/" is the "://" of a URL inside JSON text with escaped slashes.
+        'password' => '/\b[a-z][a-z0-9+.-]*:(?:\\\\?\/){2}[^\s:\/?#]*:\K[^\s\/?#]+(?=@)/i',
     ];
 }
