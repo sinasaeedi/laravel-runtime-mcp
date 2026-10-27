@@ -64,6 +64,9 @@ function redactionBuiltInSamples(): array
         'password: empty user' => ['redis://:s3cr3tpass@redis.internal:6379', 'redis://:[redacted:password]@redis.internal:6379'],
         'password: holds @' => ['mysql://app:p@ss@db/app', 'mysql://app:[redacted:password]@db/app'],
         'password: only the URL, not a later email' => ['http://a:b@c and mail x@y.z', 'http://a:[redacted:password]@c and mail x@y.z'],
+        'password: user holds @ (an email)' => ['smtp://postmaster@mg.example.com:s3cret@smtp.example.org:587', 'smtp://postmaster@mg.example.com:[redacted:password]@smtp.example.org:587'],
+        'password: user holds @ (user@server)' => ['pgsql://app@myserver:s3cret@myserver.example.net/app', 'pgsql://app@myserver:[redacted:password]@myserver.example.net/app'],
+        'password: JSON text with escaped slashes' => ['{"smtp":"smtp:\/\/app:s3cret@mail.internal:587"}', '{"smtp":"smtp:\/\/app:[redacted:password]@mail.internal:587"}'],
     ];
 }
 
@@ -84,6 +87,8 @@ function redactionFalsePositives(): array
         'URL without user info' => ['https://example.com/path?x=1'],
         'URL with a port and an @ in the query' => ['https://example.com:8080/path?x=a@b'],
         'URL with a user and no password' => ['https://user@example.com/p'],
+        'URL with an email user and a port' => ['https://user@example.com:8080/p?x=a@b'],
+        'escaped URL with a port and an @ in the query' => ['https:\/\/example.com:8080\/path?x=a@b'],
         'a time and an email' => ['at 10:30 user@example.com wrote'],
         'a short bearer word' => ['Bearer token required'],
         'rmcp_ inside a word' => ['my_rmcp_'.str_repeat('Q', 43)],
