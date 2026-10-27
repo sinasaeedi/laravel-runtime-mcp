@@ -25,4 +25,9 @@ final class OutboundFixture
     {
         return copy('ftp://example.com/x', sys_get_temp_dir().'/x');
     }
+
+    public function readFtps(): string|false
+    {
+        return file_get_contents('ftps://example.com/x');
+    }
 }

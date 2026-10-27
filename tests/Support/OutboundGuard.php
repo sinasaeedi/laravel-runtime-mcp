@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace SinaSaeedi\RuntimeMcp\Tests\Support;
 
 /**
- * Replaces the http, https and ftp stream wrappers, so file_get_contents('https://…'), fopen(),
+ * Replaces the http, https, ftp and ftps stream wrappers, so file_get_contents('https://…'), fopen(),
  * file_exists() and copy() throw OutboundCallAttempted. Never touches the file wrapper.
  * Both methods are safe to call twice, and uninstall() is safe without install().
  */
 final class OutboundGuard
 {
-    private const SCHEMES = ['http', 'https', 'ftp'];
+    private const SCHEMES = ['http', 'https', 'ftp', 'ftps'];
 
     public static function install(): void
     {
