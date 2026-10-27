@@ -79,14 +79,14 @@ it('calls a registered tool directly', function (ProtocolEra $era) {
         ->assertJsonPath('result.structuredContent.data.reply', 'pong');
 })->with([ProtocolEra::Legacy, ProtocolEra::Modern]);
 
-it('neither lists nor calls the tool of an enabled plugin whose package is missing', function () {
+it('neither lists nor calls the tool of an enabled plugin whose package is missing', function (ProtocolEra $era) {
     serveWithPlugins([FakeBasePlugin::class, FakeOptionalPlugin::class], ['fake_optional' => true]);
 
-    expect(listedToolNames())->toBe(['fake_ping']);
+    expect(listedToolNames($era))->toBe(['fake_ping']);
 
-    currentTest()->mcpPost('tools/call', ['name' => 'optional_ping', 'arguments' => (object) []])
+    currentTest()->mcpPost('tools/call', ['name' => 'optional_ping', 'arguments' => (object) []], era: $era)
         ->assertJsonPath('error.message', 'Tool [optional_ping] not found.');
-});
+})->with([ProtocolEra::Legacy, ProtocolEra::Modern]);
 
 it('follows a config change on the next request', function () {
     serveWithPlugins([FakeBasePlugin::class]);
