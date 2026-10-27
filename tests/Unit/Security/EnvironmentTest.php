@@ -35,6 +35,7 @@ it('treats a missing relaxed key as an empty list', function () {
 
 it('is a scoped binding', function () {
     $first = app(Environment::class);
+    expect(app(Environment::class))->toBe($first);
     app()->forgetScopedInstances();
 
     expect(app(Environment::class))->not->toBe($first);

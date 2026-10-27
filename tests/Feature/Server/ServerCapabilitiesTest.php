@@ -6,12 +6,15 @@ use SinaSaeedi\RuntimeMcp\Tests\Support\ProtocolEra;
 
 beforeEach(fn () => currentTest()->bootWith(['runtime-mcp.enabled' => true]));
 
-it('advertises the tools and prompts capabilities only', function () {
-    expect(currentTest()->mcpPost('initialize')->json('result.capabilities'))->toBe([
+it('advertises the tools and prompts capabilities only', function (string $method, ProtocolEra $era) {
+    expect(currentTest()->mcpPost($method, era: $era)->json('result.capabilities'))->toBe([
         'tools' => ['listChanged' => false],
         'prompts' => ['listChanged' => false],
     ]);
-});
+})->with([
+    'legacy initialize' => ['initialize', ProtocolEra::Legacy],
+    'modern server/discover' => ['server/discover', ProtocolEra::Modern],
+]);
 
 it('answers tools/list and prompts/list with empty lists', function (ProtocolEra $era) {
     expect(currentTest()->mcpPost('tools/list', era: $era)->assertOk()->json('result.tools'))->toBe([])
