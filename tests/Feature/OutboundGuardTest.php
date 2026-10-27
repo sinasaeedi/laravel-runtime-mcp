@@ -22,6 +22,11 @@ it('blocks copy() from an ftp URL', function () {
         ->toThrow(OutboundCallAttempted::class, 'ftp://example.com/x');
 });
 
+it('blocks file_get_contents() on an ftps URL', function () {
+    expect(fn () => (new OutboundFixture)->readFtps())
+        ->toThrow(OutboundCallAttempted::class, 'ftps://example.com/x');
+});
+
 it('blocks the Laravel HTTP client', function () {
     expect(fn () => Http::get('https://example.com'))->toThrow(StrayRequestException::class);
 });

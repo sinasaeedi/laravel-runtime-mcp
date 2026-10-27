@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SinaSaeedi\RuntimeMcp\Tests\Support;
 
 /**
- * Stands in for the http, https and ftp stream wrappers while a test runs (see OutboundGuard).
+ * Stands in for the http, https, ftp and ftps stream wrappers while a test runs (see OutboundGuard).
  */
 final class BlockingStreamWrapper
 {
