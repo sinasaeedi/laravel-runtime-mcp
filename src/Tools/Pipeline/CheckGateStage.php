@@ -8,6 +8,7 @@ use Closure;
 use SinaSaeedi\RuntimeMcp\Audit\Reason;
 use SinaSaeedi\RuntimeMcp\Security\Authorization\GateDecision;
 use SinaSaeedi\RuntimeMcp\Security\Authorization\ToolGate;
+use SinaSaeedi\RuntimeMcp\Security\Redaction\Redactor;
 use SinaSaeedi\RuntimeMcp\Tools\ToolCall;
 use SinaSaeedi\RuntimeMcp\Tools\ToolOutcome;
 
@@ -27,7 +28,10 @@ final class CheckGateStage implements Stage
     /** The longest Gate message kept in the note, in characters. */
     public const MAX_MESSAGE = 200;
 
-    public function __construct(private readonly ToolGate $gate) {}
+    public function __construct(
+        private readonly ToolGate $gate,
+        private readonly Redactor $redactor,
+    ) {}
 
     public function handle(ToolCall $call, Closure $next): ToolOutcome
     {
@@ -37,10 +41,14 @@ final class CheckGateStage implements Stage
             return $next($call);
         }
 
-        return ToolOutcome::denied($decision->reason, self::note($call->tool->ability(), $decision));
+        return ToolOutcome::denied($decision->reason, $this->note($call->tool->ability(), $decision));
     }
 
-    private static function note(string $ability, GateDecision $decision): string
+    /**
+     * The Gate's message is redacted whole, then cut. The other order would hand RedactStage a secret
+     * cut in half, which no pattern matches (a password with no "@" after it, a token too short).
+     */
+    private function note(string $ability, GateDecision $decision): string
     {
         $note = match ($decision->reason) {
             Reason::NoGate => self::NO_GATE,
@@ -50,7 +58,7 @@ final class CheckGateStage implements Stage
         $note = sprintf($note, $ability);
 
         if ($decision->message !== null && $decision->message !== '') {
-            $note .= ' '.mb_substr($decision->message, 0, self::MAX_MESSAGE);
+            $note .= ' '.mb_substr($this->redactor->redactString($decision->message), 0, self::MAX_MESSAGE);
         }
 
         return $note;
