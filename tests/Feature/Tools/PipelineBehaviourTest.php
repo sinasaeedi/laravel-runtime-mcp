@@ -12,6 +12,7 @@ use SinaSaeedi\RuntimeMcp\Tests\Support\FixtureTools;
 use SinaSaeedi\RuntimeMcp\Tests\Support\JsonSchemaSubset;
 use SinaSaeedi\RuntimeMcp\Tests\Support\ProtocolEra;
 use SinaSaeedi\RuntimeMcp\Tools\Pipeline\AuditStage;
+use SinaSaeedi\RuntimeMcp\Tools\Pipeline\RunTool;
 
 /*
  * Parts E and F over HTTP, behind the real middleware: what the agent receives. The audit side of
@@ -145,3 +146,15 @@ it('records the validation failure class, not a guess', function () {
 
     expect(AuditLog::entries()[0]['error_class'] ?? null)->toBe(ValidationException::class);
 });
+
+it('redacts the whole message before the cut, so a secret across the cut does not reach the agent in part', function (string $secret, string $marker, string $start) {
+    // The secret starts at character 285 of the message, so the 300-character cut splits it.
+    $prefix = str_repeat('x', 280).' at ';
+    $response = FixtureTools::call('throwing', ['message' => $prefix.$secret.' and more']);
+
+    expect(FixtureTools::envelope($response)['note'])->toBe('The tool failed: RuntimeException: '.mb_substr($prefix.$marker.' and more', 0, RunTool::MAX_MESSAGE))
+        ->and(str_contains((string) $response->getContent(), $start))->toBeFalse();
+})->with([
+    'a password URL' => ['redis://:Secr3tPassw0rdValue@cache.internal:6379', 'redis://:[redacted:password]@cache.internal:6379', 'Secr3t'],
+    'a GitHub token' => ['ghp_'.str_repeat('A1b2C3d4E5', 4), '[redacted:github_token]', 'ghp_A1b2'],
+]);
