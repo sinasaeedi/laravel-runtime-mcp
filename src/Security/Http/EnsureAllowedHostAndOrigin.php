@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SinaSaeedi\RuntimeMcp\Security\Http;
 
 use Closure;
+use ErrorException;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -43,11 +44,13 @@ final class EnsureAllowedHostAndOrigin
 
         // getHost() applies the app's TrustProxies settings: X-Forwarded-Host counts only from a
         // trusted proxy. It throws for a malformed or untrusted host, then returns '' on a later
-        // call; both are refused. Never read X-Forwarded-Host here.
+        // call; both are refused. An empty X-Forwarded-Host from a trusted proxy makes getPort() read
+        // past the end of '' (a PHP warning, an ErrorException in Laravel); that is refused too.
+        // Never read X-Forwarded-Host here.
         try {
             $host = $request->getHost();
             $port = $request->getPort();
-        } catch (RequestExceptionInterface) {
+        } catch (RequestExceptionInterface|ErrorException) {
             $host = '';
             $port = null;
         }
