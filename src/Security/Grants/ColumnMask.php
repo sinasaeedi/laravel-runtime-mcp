@@ -64,7 +64,8 @@ final class ColumnMask
     public function matches(string $column): bool
     {
         foreach ($this->regexes as $regex) {
-            if (preg_match($regex, $column) === 1) {
+            // false (the PCRE backtrack limit, for example) masks the column: an error never grants it.
+            if (preg_match($regex, $column) !== 0) {
                 return true;
             }
         }

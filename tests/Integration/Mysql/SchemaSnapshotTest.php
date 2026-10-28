@@ -87,3 +87,33 @@ it('reads the columns of a prefixed table without adding the prefix again', func
         $privileged->statement('DROP TABLE IF EXISTS pfx_widgets');
     }
 });
+
+it('keeps a database whose name starts with pg_', function () {
+    // The pg_ filter is for PostgreSQL system schemas only.
+    $privileged = DB::connection('testing_mysql');
+    $config = config('database.connections.testing_mysql');
+    assert(is_array($config));
+
+    try {
+        $privileged->statement('CREATE DATABASE pg_runtime_mcp');
+        config()->set('database.connections.testing_mysql_pg', [...$config, 'database' => 'pg_runtime_mcp']);
+
+        expect(SchemaSnapshot::appSchemas(DB::connection('testing_mysql_pg')))->toBe(['pg_runtime_mcp']);
+    } finally {
+        DB::purge('testing_mysql_pg');
+        $privileged->statement('DROP DATABASE IF EXISTS pg_runtime_mcp');
+    }
+});
+
+it('reads the columns of a table whose name holds a quote or a backslash', function () {
+    $privileged = DB::connection('testing_mysql');
+
+    try {
+        $privileged->statement("CREATE TABLE `o'brien\\notes` (id integer, password varchar(20))");
+
+        expect(SchemaSnapshot::read($privileged)->tables)
+            ->toContainEqual(new TableSnapshot('runtime_mcp', "o'brien\\notes", ['id', 'password']));
+    } finally {
+        $privileged->statement("DROP TABLE IF EXISTS `o'brien\\notes`");
+    }
+});

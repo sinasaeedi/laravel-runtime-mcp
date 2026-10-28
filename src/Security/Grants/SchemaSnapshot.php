@@ -68,7 +68,16 @@ final class SchemaSnapshot
         $listing = $connection->getSchemaBuilder()->getCurrentSchemaListing() ?? [];
 
         // Only non-empty strings: PostgreSQL's "$user" becomes the username config, which is not typed.
-        return array_values(array_filter(array_map(self::text(...), $listing), fn (string $schema): bool => $schema !== ''));
+        $schemas = array_filter(array_map(self::text(...), $listing), fn (string $schema): bool => $schema !== '');
+
+        // getTables() leaves out the PostgreSQL system schemas only when it gets no list. A search path
+        // that names pg_catalog would otherwise grant pg_authid and pg_statistic. PostgreSQL reserves the
+        // pg_ prefix, so no app schema starts with it.
+        if ($connection->getDriverName() === 'pgsql') {
+            $schemas = array_filter($schemas, fn (string $schema): bool => $schema !== 'information_schema' && ! str_starts_with($schema, 'pg_'));
+        }
+
+        return array_values($schemas);
     }
 
     /**
@@ -82,8 +91,9 @@ final class SchemaSnapshot
     private static function columns(Connection $connection, Grammar $grammar, string $schema, string $table): array
     {
         $columns = [];
+        $sql = $grammar->compileColumns(self::escaped($connection, $schema), self::escaped($connection, $table));
 
-        foreach ($connection->selectFromWriteConnection($grammar->compileColumns($schema, $table)) as $row) {
+        foreach ($connection->selectFromWriteConnection($sql) as $row) {
             $name = self::text(((array) $row)['name'] ?? null);
 
             // A row without a name cannot be granted: leaving it out only denies more.
@@ -118,6 +128,16 @@ final class SchemaSnapshot
         }
 
         return $partitions;
+    }
+
+    /**
+     * compileColumns() puts each name between quotes without escaping it, so a ' in a table name broke
+     * the query, and a crafted name could read the columns of another table. The connection escapes it
+     * for its own driver; the grammar adds the outer quotes.
+     */
+    private static function escaped(Connection $connection, string $name): string
+    {
+        return substr($connection->escape($name), 1, -1);
     }
 
     private static function text(mixed $value): string

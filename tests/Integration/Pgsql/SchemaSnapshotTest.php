@@ -114,3 +114,31 @@ it('leaves out a dropped column', function () {
     expect(SchemaSnapshot::read($privileged)->tables)
         ->toContainEqual(new TableSnapshot('public', 'orders', ['id', 'user_id', 'number', 'total', 'created_at']));
 });
+
+it('leaves out the system schemas that the search path names', function () {
+    // With an explicit list, getTables() no longer leaves out pg_* and information_schema: pg_catalog in
+    // the search path would give the role pg_authid (password hashes) and pg_statistic (column values).
+    $system = DB::connection(pgsqlSnapshotConnection('testing_pgsql_system', ['search_path' => 'public,pg_catalog,information_schema']));
+
+    try {
+        $names = pgsqlSnapshotNames(SchemaSnapshot::read($system));
+
+        expect(SchemaSnapshot::appSchemas($system))->toBe(['public'])
+            ->and(array_values(array_filter($names, fn (string $name): bool => ! str_starts_with($name, 'public.'))))->toBe([]);
+    } finally {
+        DB::purge('testing_pgsql_system');
+    }
+});
+
+it('reads the columns of a table whose name holds a quote or a backslash', function () {
+    $privileged = DB::connection('testing_pgsql');
+
+    try {
+        $privileged->statement('CREATE TABLE "o\'brien\\notes" (id integer, password text)');
+
+        expect(SchemaSnapshot::read($privileged)->tables)
+            ->toContainEqual(new TableSnapshot('public', "o'brien\\notes", ['id', 'password']));
+    } finally {
+        $privileged->statement('DROP TABLE IF EXISTS "o\'brien\\notes"');
+    }
+});

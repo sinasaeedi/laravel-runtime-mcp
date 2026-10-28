@@ -115,3 +115,13 @@ it('refuses a masked_columns value that is not an array', function (mixed $value
 it('refuses a missing masked_columns key', function () {
     expect(fn () => ColumnMask::fromConfig(new Repository([])))->toThrow(InvalidGrantConfig::class);
 });
+
+it('masks a column when the regex engine gives up on a pattern', function () {
+    // The column matches, but PCRE hits its backtrack limit first and preg_match() returns false.
+    // An error must mask the column, never grant it.
+    $pattern = '*x'.str_repeat('*a', 22).'*';
+    $column = 'x'.str_repeat('a', 32).'x'.str_repeat('a', 21);
+
+    expect(preg_match('/^'.str_replace('\*', '.*', preg_quote($pattern, '/')).'$/iDs', $column))->toBeFalse()
+        ->and((new ColumnMask([$pattern]))->matches($column))->toBeTrue();
+});
