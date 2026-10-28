@@ -11,6 +11,7 @@ use SinaSaeedi\RuntimeMcp\Security\Boot\BootIssue;
 use SinaSaeedi\RuntimeMcp\Security\Boot\BootRule;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ApiKeysFormat;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ApiKeysPresent;
+use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\EnvironmentName;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\PluginsInstalled;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ReadOnlyConnection;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Severity;
@@ -55,7 +56,8 @@ it('gives each rule a stable id', function () {
     expect(app(ApiKeysPresent::class)->id())->toBe('api_keys.present')
         ->and(app(ApiKeysFormat::class)->id())->toBe('api_keys.format')
         ->and(app(ReadOnlyConnection::class)->id())->toBe('database.connection')
-        ->and(app(PluginsInstalled::class)->id())->toBe('plugins.installed');
+        ->and(app(PluginsInstalled::class)->id())->toBe('plugins.installed')
+        ->and(app(EnvironmentName::class)->id())->toBe('environment.name');
 });
 
 // api_keys.present
@@ -244,3 +246,23 @@ it('fails plugins.installed for an enabled plugin whose package is missing', fun
 it('passes plugins.installed for the base plugins', function () {
     expect(bootRulesCheck(PluginsInstalled::class))->toBe([]);
 });
+
+// environment.name (01-02 review)
+
+it('fails environment.name for an empty or blank environment name', function (string $environment) {
+    currentTest()->bootWith(environment: $environment);
+
+    expect(bootRulesFlat(bootRulesCheck(EnvironmentName::class)))->toBe([[
+        'environment.name', 'error',
+        'The environment name is empty. Set APP_ENV, for example to `production`, so the server name tells the agent which server it is on.',
+    ]]);
+})->with([
+    'empty' => [''],
+    'only spaces' => ['  '],
+]);
+
+it('passes environment.name for a named environment', function (string $environment) {
+    currentTest()->bootWith(environment: $environment);
+
+    expect(bootRulesCheck(EnvironmentName::class))->toBe([]);
+})->with(['staging', 'prod-eu']);
