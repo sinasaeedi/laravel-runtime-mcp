@@ -118,3 +118,22 @@ it('cuts a long list of validation messages to 300 characters', function () {
 
     expect(mb_strlen((string) $note))->toBe(mb_strlen('Invalid input: ') + RunTool::MAX_MESSAGE);
 });
+
+it('redacts a validation message before the cut, so a secret across the cut does not stay in part', function () {
+    $prefix = str_repeat('v', 290).' ';
+    $token = 'ghp_'.str_repeat('A1b2C3d4E5', 4);
+    $rule = fn (string $attribute, mixed $value, Closure $fail) => $fail($prefix.$token);
+
+    $note = runToolWith(['token' => [$rule]], ['token' => 'x'])->result->note;
+
+    expect($note)->toBe('Invalid input: '.mb_substr($prefix.'[redacted:github_token]', 0, RunTool::MAX_MESSAGE));
+});
+
+it('gives the default from get() for an argument sent as null, and keeps the null in all()', function () {
+    $outcome = runToolWith(['limit' => ['nullable', 'integer']], ['limit' => null], fn (ToolInput $input): ToolResult => ToolResult::ok([
+        'get' => $input->get('limit', 50),
+        'all' => $input->all(),
+    ]));
+
+    expect($outcome->result->data)->toBe(['get' => 50, 'all' => ['limit' => null]]);
+});

@@ -37,6 +37,7 @@ final class RunTool
         private readonly Factory $validation,
         private readonly ExceptionHandler $exceptions,
         private readonly WriteAttemptExplainer $writes,
+        private readonly Redactor $redactor,
     ) {}
 
     public function handle(ToolCall $call): ToolOutcome
@@ -54,7 +55,7 @@ final class RunTool
         try {
             $validated = $validator->validate();
         } catch (ValidationException $e) {
-            return ToolOutcome::failed($e, 'Invalid input: '.self::cut(implode(' ', $e->validator->errors()->all())));
+            return ToolOutcome::failed($e, 'Invalid input: '.$this->cut(implode(' ', $e->validator->errors()->all())));
         }
 
         try {
@@ -64,11 +65,10 @@ final class RunTool
             return ToolOutcome::success($result->withContent(self::plain($result->data), $result->note));
         } catch (Throwable $e) {
             // Spec 4.4: the full exception goes to the app's log; the agent gets the class and the
-            // message, which RedactStage redacts on the way out. A write that the read-only transaction
-            // blocked gets its own note (01-16).
+            // redacted message. A write that the read-only transaction blocked gets its own note (01-16).
             $this->exceptions->report($e);
 
-            return ToolOutcome::failed($e, $this->writes->note($e) ?? 'The tool failed: '.$e::class.': '.self::cut($e->getMessage()));
+            return ToolOutcome::failed($e, $this->writes->note($e) ?? 'The tool failed: '.$e::class.': '.$this->cut($e->getMessage()));
         }
     }
 
@@ -128,8 +128,12 @@ final class RunTool
         };
     }
 
-    private static function cut(string $message): string
+    /**
+     * Redacts the whole message, then cuts it. The other order would hand RedactStage a secret cut
+     * in half, which no pattern matches (a password with no "@" after it, a token too short).
+     */
+    private function cut(string $message): string
     {
-        return mb_substr($message, 0, self::MAX_MESSAGE);
+        return mb_substr($this->redactor->redactString($message), 0, self::MAX_MESSAGE);
     }
 }
