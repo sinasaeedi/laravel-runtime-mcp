@@ -96,4 +96,7 @@ it('fails closed when the user provider cannot look the user up', function (arra
 })->with([
     'unknown provider driver' => [['auth.providers.users.driver' => 'nope']],
     'no users table' => [[]], // this test creates no table
+    // Sanctum's guard has 'provider' => null, and Laravel's auth config has no defaults.provider.
+    'a default guard with no provider' => [['auth.guards.api' => ['driver' => 'sanctum', 'provider' => null], 'auth.defaults.guard' => 'api']],
+    'a provider name with no entry' => [['auth.guards.web.provider' => 'admins']],
 ]);
