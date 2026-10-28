@@ -6,6 +6,7 @@ namespace SinaSaeedi\RuntimeMcp\Audit;
 
 use Illuminate\Contracts\Config\Repository;
 use Monolog\Formatter\JsonFormatter;
+use Monolog\Handler\NullHandler;
 
 /**
  * Spec 5.7: the audit log channel. The package registers it as a daily JSON channel when the app
@@ -23,12 +24,20 @@ final class AuditChannel
     /** Letters, digits, "_" and "-". A dot would make logging.channels.<name> a nested key. */
     private const NAME_RULE = '/^[A-Za-z0-9_-]{1,64}$/';
 
-    /** The channel name: runtime-mcp.audit.channel when it is valid, else "runtime-mcp". */
+    /**
+     * The channel name: runtime-mcp.audit.channel when it is valid, else "runtime-mcp". A name whose
+     * channel drops every entry (Laravel's own "null" channel) is not valid: it would turn the audit
+     * off with no error.
+     */
     public static function name(Repository $config): string
     {
         $name = $config->get('runtime-mcp.audit.channel');
 
-        return is_string($name) && preg_match(self::NAME_RULE, $name) === 1 ? $name : self::DEFAULT_NAME;
+        if (! is_string($name) || preg_match(self::NAME_RULE, $name) !== 1) {
+            return self::DEFAULT_NAME;
+        }
+
+        return self::discards($config->get("logging.channels.{$name}")) ? self::DEFAULT_NAME : $name;
     }
 
     /**
@@ -63,5 +72,16 @@ final class AuditChannel
             'formatter' => JsonFormatter::class,
             'replace_placeholders' => true,
         ]);
+    }
+
+    /**
+     * The monolog driver with a NullHandler: Laravel's "null" channel, which writes nothing. 01-12
+     * (doctor) fails for an app's own channel of this shape, which name() cannot fall back from.
+     */
+    public static function discards(mixed $channel): bool
+    {
+        $handler = is_array($channel) && ($channel['driver'] ?? null) === 'monolog' ? $channel['handler'] ?? null : null;
+
+        return is_string($handler) && is_a($handler, NullHandler::class, true);
     }
 }

@@ -34,6 +34,32 @@ it('falls back to runtime-mcp for a bad channel name', function (mixed $name) {
     'false' => [false],
 ]);
 
+// Rule 12: a channel that drops every entry would turn the audit off with no error.
+it('falls back to runtime-mcp for a channel that drops every entry', function (mixed $handler) {
+    $config = new ConfigRepository([
+        'runtime-mcp' => ['audit' => ['channel' => 'discard']],
+        'logging' => ['channels' => ['discard' => ['driver' => 'monolog', 'handler' => $handler]]],
+    ]);
+
+    expect(AuditChannel::name($config))->toBe('runtime-mcp');
+})->with([
+    'NullHandler' => [Monolog\Handler\NullHandler::class],
+    'with a leading backslash' => ['\\'.Monolog\Handler\NullHandler::class],
+]);
+
+it('keeps a monolog channel that writes', function (mixed $channel) {
+    $config = new ConfigRepository([
+        'runtime-mcp' => ['audit' => ['channel' => 'siem']],
+        'logging' => ['channels' => ['siem' => $channel]],
+    ]);
+
+    expect(AuditChannel::name($config))->toBe('siem');
+})->with([
+    'another handler' => [['driver' => 'monolog', 'handler' => Monolog\Handler\StreamHandler::class]],
+    'a NullHandler on another driver' => [['driver' => 'custom', 'handler' => Monolog\Handler\NullHandler::class]],
+    'not defined yet' => [null],
+]);
+
 it('takes a valid retention', function (mixed $days, int $expected) {
     expect(AuditChannel::days(auditChannelConfig('runtime-mcp', $days)))->toBe($expected);
 })->with([

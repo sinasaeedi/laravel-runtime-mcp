@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
@@ -235,6 +236,70 @@ it('reports a rejected request when the Redactor cannot be built, and does not t
     auditLoggerAssertRejectionReported(['runtime-mcp.redaction.extra_patterns' => ['/(/']]);
 });
 
+/** The app's exception handler fails too, as on the same full disk (Part C: "report() may fail too"). */
+function auditLoggerBreakExceptionHandler(): void
+{
+    app()->instance(ExceptionHandler::class, new class implements ExceptionHandler
+    {
+        public function report(Throwable $e): void
+        {
+            throw new RuntimeException('handler down');
+        }
+
+        public function shouldReport(Throwable $e): bool
+        {
+            return true;
+        }
+
+        public function render($request, Throwable $e): never
+        {
+            throw $e;
+        }
+
+        public function renderForConsole($output, Throwable $e): void {}
+    });
+}
+
+it('does not throw on a rejected request when the write and the exception handler both fail', function () {
+    currentTest()->bootWith(auditLoggerBrokenChannel());
+    auditLoggerBreakExceptionHandler();
+    Event::fake([AuthFailed::class]);
+
+    $thrown = null;
+
+    try {
+        app(AuditLogger::class)->rejectedRequest(auditLoggerRejection());
+    } catch (Throwable $e) {
+        $thrown = $e;
+    }
+
+    expect($thrown)->toBeNull();
+    Event::assertNotDispatched(AuthFailed::class);
+});
+
+it('returns normally when a listener and the exception handler both fail', function () {
+    auditLoggerBreakExceptionHandler();
+
+    $calls = 0;
+    Event::listen(ToolCalled::class, function () use (&$calls): void {
+        $calls++;
+
+        throw new RuntimeException('listener down');
+    });
+
+    $thrown = null;
+
+    try {
+        app(AuditLogger::class)->toolCall(auditLoggerCall());
+    } catch (Throwable $e) {
+        $thrown = $e;
+    }
+
+    expect($thrown)->toBeNull()
+        ->and($calls)->toBe(1)
+        ->and(AuditLog::lines())->toHaveCount(1);
+});
+
 // Laravel's Logger writes, then fires MessageLogged inside the same call. A MessageLogged listener
 // that throws therefore withholds the result, although the line is on disk (errs closed, Part C).
 it('treats a throwing MessageLogged listener as a failed write', function () {
@@ -263,6 +328,23 @@ it('writes to the channel named in audit.channel', function () {
         @unlink(storage_path('logs/runtime-mcp-security-test.log'));
     }
 });
+
+// Rule 12: Laravel merges its own "null" channel (a NullHandler) into every app. Used as it is, it
+// would drop every entry with no error, and the tool result would go out unaudited.
+it('writes to runtime-mcp when audit.channel names a channel that drops every entry', function (array $config) {
+    /** @var array<string, mixed> $config */
+    currentTest()->bootWith($config);
+
+    app(AuditLogger::class)->toolCall(auditLoggerCall());
+
+    expect(AuditLog::lines())->toHaveCount(1);
+})->with([
+    "Laravel's null channel" => [['runtime-mcp.audit.channel' => 'null']],
+    'an app channel with a NullHandler' => [[
+        'runtime-mcp.audit.channel' => 'discard',
+        'logging.channels.discard' => ['driver' => 'monolog', 'handler' => '\\'.Monolog\Handler\NullHandler::class],
+    ]],
+]);
 
 it('keeps params of exactly 16,384 bytes and cuts one byte more', function () {
     // {"q":"…"} adds 8 bytes around the string.
