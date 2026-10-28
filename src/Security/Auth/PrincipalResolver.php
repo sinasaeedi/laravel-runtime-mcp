@@ -7,6 +7,7 @@ namespace SinaSaeedi\RuntimeMcp\Security\Auth;
 use Illuminate\Auth\AuthManager;
 use Illuminate\Contracts\Auth\UserProvider;
 use Illuminate\Contracts\Config\Repository;
+use LogicException;
 use SinaSaeedi\RuntimeMcp\Principal;
 use Throwable;
 
@@ -49,7 +50,10 @@ final class PrincipalResolver
         }
 
         try {
-            $user = $this->provider()?->retrieveByCredentials(['email' => $email]);
+            // A guard with no user provider (Sanctum's guard, a provider name with no entry) is a
+            // provider error too, never "no such user".
+            $provider = $this->provider() ?? throw new LogicException('The default guard has no user provider.');
+            $user = $provider->retrieveByCredentials(['email' => $email]);
         } catch (Throwable $e) {
             // An unknown provider driver, a missing users table: closed, and doctor (01-12) says why.
             throw new LinkedUserMissing($name, $e);

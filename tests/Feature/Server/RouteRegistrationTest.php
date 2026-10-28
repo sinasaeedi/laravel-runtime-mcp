@@ -50,8 +50,14 @@ it('answers 401 to GET and DELETE without a key', function () {
     AuditLog::clear();
 
     try {
-        currentTest()->get('/mcp')->assertUnauthorized();
-        currentTest()->delete('/mcp')->assertUnauthorized();
+        // The one 401 of spec 5.3, and audited like any rejection.
+        foreach ([currentTest()->get('/mcp'), currentTest()->delete('/mcp')] as $response) {
+            $response->assertUnauthorized()
+                ->assertExactJson(['message' => 'Unauthenticated.'])
+                ->assertHeader('WWW-Authenticate', 'Bearer realm="runtime-mcp", error="invalid_token"');
+        }
+
+        expect(array_column(AuditLog::entries(), 'reason'))->toBe(['missing_credentials', 'missing_credentials']);
     } finally {
         AuditLog::clear();
     }
