@@ -81,7 +81,7 @@ it('denies gate_error, and writes one warning, when a Gate typed User meets an u
         ->and($decision->reason?->value)->toBe('gate_error')
         ->and($decision->message)->toBeNull()
         ->and($log->messages())->toBe([
-            'runtime-mcp: the Gate runtime-mcp.echo (or a Gate::before() callback) threw TypeError for a Principal subject. Type the callback as Principal|User.',
+            'runtime-mcp: the Gate runtime-mcp.echo (or a Gate::before() or Gate::after() callback, or a GateEvaluated listener) threw TypeError for a Principal subject. Type the callback as Principal|User.',
         ]);
 });
 
