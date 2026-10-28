@@ -89,3 +89,10 @@ it('follows environments.relaxed: a listed name throws', function () {
 
     expect($boot->thrown)->toBeInstanceOf(RuntimeMcpMisconfigured::class);
 });
+
+it('throws for an empty environment name that is listed as relaxed (01-02 review)', function () {
+    $boot = BootCapture::boot(['runtime-mcp.environments.relaxed' => ['']], '');
+
+    expect($boot->thrown)->toBeInstanceOf(RuntimeMcpMisconfigured::class)
+        ->and($boot->thrown?->getMessage())->toContain('- [environment.name] ');
+});
