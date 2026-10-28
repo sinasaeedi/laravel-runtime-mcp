@@ -188,7 +188,7 @@ abstract class TestCase extends Orchestra
     {
         $uri = $uri instanceof Uri ? $uri->value() : $uri;
 
-        if (str_contains($uri, '://')) {
+        if (preg_match('~^[a-z][a-z0-9+.-]*://~i', $uri) === 1) {
             return $uri;
         }
 

@@ -141,6 +141,7 @@ it('lets an allowed host without Origin through', function (array $config, strin
     'IPv6' => [['app.url' => 'http://[::1]:8000'], 'http://[::1]:8000/mcp'],
     'an entry with the same port' => [['runtime-mcp.allowed_hosts' => ['app.test:8443']], 'https://app.test:8443/mcp'],
     'the second entry' => [['runtime-mcp.allowed_hosts' => ['other.test', 'mcp.internal']], 'https://mcp.internal/mcp'],
+    'a relative path with :// in its query' => [[], '/mcp?next=https://evil.example'],
 ])->with([ProtocolEra::Legacy, ProtocolEra::Modern]);
 
 it('refuses a host that is not allowed', function (array $config, string $url, string $rawHost, ProtocolEra $era) {
@@ -284,6 +285,7 @@ it('ignores X-Forwarded-Host from a client that is not a trusted proxy', functio
 
 it('compares the forwarded port from a trusted proxy when the entry names a port', function (?string $port, bool $passes) {
     currentTest()->bootWith(hostOriginBootConfig(['runtime-mcp.allowed_hosts' => ['app.test:8443']]));
+    Event::fake([AuthFailed::class]);
     TrustProxies::at(['127.0.0.1']);
     $headers = ['X-Forwarded-Host' => 'app.test'];
 
@@ -293,7 +295,7 @@ it('compares the forwarded port from a trusted proxy when the entry names a port
 
     $response = hostOriginPost('https://lb.internal/mcp', $headers);
 
-    $passes ? $response->assertOk() : hostOriginAssertRefused($response);
+    $passes ? hostOriginAssertPassed($response) : hostOriginAssertRefused($response);
 })->with([
     'the right port' => ['8443', true],
     'another port' => ['9999', false],
@@ -390,4 +392,40 @@ it('checks SERVER_NAME when there is no Host header, and logs an empty host', fu
 
     expect($response->getStatusCode())->toBe(403);
     hostOriginAssertAudited(Reason::BadHost, ['host' => '']);
+});
+
+// An empty X-Forwarded-Host from a trusted proxy: getHost() returns '', and getPort() raises a PHP
+// warning that Laravel turns into an ErrorException. With the default cors.paths, Laravel's global
+// HandleCors meets the same warning first (500 before the route group); with cors.paths = [] the
+// request reaches this check, which must refuse it.
+it('refuses an empty X-Forwarded-Host from a trusted proxy', function () {
+    currentTest()->bootWith(hostOriginBootConfig(['cors.paths' => []]));
+    Event::fake([AuthFailed::class]);
+    TrustProxies::at(['127.0.0.1']);
+
+    hostOriginAssertRefused(hostOriginPost('https://lb.internal/mcp', ['X-Forwarded-Host' => '']));
+    hostOriginAssertAudited(Reason::BadHost, ['host' => 'lb.internal', 'scheme' => 'Bearer']);
+});
+
+// The other RequestExceptionInterface: a trusted Forwarded header that disagrees with
+// X-Forwarded-Host. Laravel's default header set does not trust Forwarded, so the request is built
+// by hand, as in F17.
+it('refuses conflicting forwarded headers that reach the middleware', function () {
+    currentTest()->bootWith(hostOriginBootConfig());
+    Event::fake([AuthFailed::class]);
+    Request::setTrustedProxies(['127.0.0.1'], Request::HEADER_FORWARDED | Request::HEADER_X_FORWARDED_HOST);
+    $request = Request::create('https://lb.internal/mcp', 'POST');
+    $request->headers->set('Forwarded', 'host=evil.example');
+    $request->headers->set('X-Forwarded-Host', 'app.test');
+
+    $reached = false;
+    $response = app(EnsureAllowedHostAndOrigin::class)->handle($request, function () use (&$reached): Response {
+        $reached = true;
+
+        return new Response('next');
+    });
+
+    expect($reached)->toBeFalse()
+        ->and($response->getStatusCode())->toBe(403);
+    hostOriginAssertAudited(Reason::BadHost, ['host' => 'lb.internal']);
 });
