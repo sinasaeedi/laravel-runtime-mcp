@@ -458,10 +458,39 @@ it('Audit log: fails when the channel is not defined', function () {
 
     expect(runCoreCheck(AuditLog::class))->toBe([[
         'fail',
-        'Log channel `runtime-mcp` is not defined, so tool results are withheld.',
+        'Log channel `runtime-mcp` is not defined, so Laravel writes the audit to its emergency log instead.',
         'Define logging.channels.runtime-mcp, or remove it from config/logging.php so the package registers its own.',
     ]]);
 });
+
+it('Audit log: fails when the channel drops every entry (01-05 re-review)', function () {
+    currentTest()->bootWith(['logging.channels.runtime-mcp' => ['driver' => 'monolog', 'handler' => Monolog\Handler\NullHandler::class]]);
+
+    expect(runCoreCheck(AuditLog::class))->toBe([[
+        'fail',
+        'Channel `runtime-mcp` drops every entry (NullHandler), so no tool call is audited.',
+        'Give logging.channels.runtime-mcp a handler that writes, or remove it from config/logging.php so the package registers its own.',
+    ]]);
+});
+
+it('Audit log: warns when the channel level is above info (01-05 re-review)', function (string $level) {
+    currentTest()->bootWith(['logging.channels.runtime-mcp' => ['driver' => 'stack', 'channels' => ['single'], 'level' => $level]]);
+
+    expect(runCoreCheck(AuditLog::class))->toBe([
+        [
+            'warn',
+            "Channel `runtime-mcp` has level `{$level}`, so it drops the audit entries below it (a successful tool call is `info`).",
+            'Set logging.channels.runtime-mcp.level to info or debug.',
+        ],
+        ['pass', "The app's channel `runtime-mcp` writes the audit.", null],
+    ]);
+})->with(['notice', 'warning', 'emergency']);
+
+it('Audit log: does not warn for a channel level of info or below', function (string $level) {
+    currentTest()->bootWith(['logging.channels.runtime-mcp' => ['driver' => 'stack', 'channels' => ['single'], 'level' => $level]]);
+
+    expect(array_column(runCoreCheck(AuditLog::class), 0))->toBe(['pass']);
+})->with(['debug', 'info']);
 
 it('Audit log: warns when audit.channel or audit.days falls back (01-05)', function (array $config, string $message) {
     /** @var array<string, mixed> $config */
@@ -472,7 +501,8 @@ it('Audit log: warns when audit.channel or audit.days falls back (01-05)', funct
     expect(array_column($results, 0))->toBe(['warn', 'pass'])
         ->and($results[0][1])->toBe($message);
 })->with([
-    'a dotted channel name' => [['runtime-mcp.audit.channel' => 'runtime.mcp'], 'runtime-mcp.audit.channel is not a valid channel name, so the audit uses `runtime-mcp`.'],
+    'a dotted channel name' => [['runtime-mcp.audit.channel' => 'runtime.mcp'], 'runtime-mcp.audit.channel is not a valid channel name, or its channel drops every entry, so the audit uses `runtime-mcp`.'],
+    "Laravel's null channel" => [['runtime-mcp.audit.channel' => 'null'], 'runtime-mcp.audit.channel is not a valid channel name, or its channel drops every entry, so the audit uses `runtime-mcp`.'],
     'zero days' => [['runtime-mcp.audit.days' => 0], 'runtime-mcp.audit.days is not a whole number of 1 or more, so 90 is used.'],
     'days not a number' => [['runtime-mcp.audit.days' => 'ninety'], 'runtime-mcp.audit.days is not a whole number of 1 or more, so 90 is used.'],
 ]);
