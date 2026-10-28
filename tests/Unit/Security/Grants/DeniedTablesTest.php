@@ -88,3 +88,11 @@ it('refuses a denied_tables value that is not an array', function (mixed $value)
     'a string' => ['sessions'],
     'false' => [false],
 ]);
+
+it('ignores an entry with an empty part before or after the dot, so doctor reports it', function () {
+    // Each one can match no table. Kept silently, the table it meant would be granted with no warning.
+    $denied = new DeniedTables(['.sessions', 'sessions.', 'public.', '.', 'audit.log']);
+
+    expect($denied->ignored())->toBe(['.sessions', 'sessions.', 'public.', '.'])
+        ->and($denied->contains('audit', 'log'))->toBeTrue();
+});
