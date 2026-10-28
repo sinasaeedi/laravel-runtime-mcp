@@ -12,11 +12,13 @@ use SinaSaeedi\RuntimeMcp\Security\Boot\BootRule;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ApiKeysFormat;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ApiKeysPresent;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\AuthDriver;
+use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\EnvironmentName;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\PluginsInstalled;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ReadOnlyConnection;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\SanctumInstalled;
 use SinaSaeedi\RuntimeMcp\Security\BootValidator;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Boot\FailingRule;
+use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Boot\InvalidResultRule;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Boot\ThrowingRule;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Boot\WarningRule;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Plugins\FakeBasePlugin;
@@ -60,6 +62,7 @@ it('lists the core rules of v1.0.0, in order', function () {
         SanctumInstalled::class, // 01-35
         ReadOnlyConnection::class,
         PluginsInstalled::class,
+        EnvironmentName::class, // 01-02 review
     ]);
 });
 
@@ -142,4 +145,22 @@ it('allows HTTP and STDIO by the driver, the key ring and the STDIO principal', 
     'keys, an invalid principal' => [['runtime-mcp.auth.stdio_principal' => 'local dev'], true, true, false],
     'driver sanctum, no keys' => [['runtime-mcp.auth.driver' => 'sanctum', 'runtime-mcp.auth.api_keys' => null], true, true, false],
     'a malformed ring' => [['runtime-mcp.auth.api_keys' => 'sina:abc', 'runtime-mcp.auth.stdio_principal' => 'local-dev'], false, false, false],
+]);
+
+it('turns a rule whose check() returns anything but a list of BootIssue into an error (review 01-10 M2)', function (array $result) {
+    app()->bind(InvalidResultRule::class, fn (): InvalidResultRule => new InvalidResultRule($result));
+
+    $report = (new BootValidator(app(), app(Repository::class), app(PluginRegistry::class), [WarningRule::class, InvalidResultRule::class]))->validate();
+
+    expect(array_map(fn (BootIssue $issue): array => $issue->toArray(), $report->issues))->toBe([
+        ['rule' => 'fixture.warning', 'severity' => 'warning', 'message' => WarningRule::MESSAGE],
+        ['rule' => 'fixture.invalid', 'severity' => 'error', 'message' => 'Rule fixture.invalid returned an invalid result.'],
+    ])
+        ->and($report->warnings())->toHaveCount(1);
+})->with([
+    'a string' => [['Horizon is not configured.']],
+    'null' => [[null]],
+    'an issue as an array' => [[['rule' => 'fixture.invalid', 'severity' => 'error', 'message' => 'm']]],
+    'a valid issue and a string' => [[BootIssue::warning('fixture.invalid', 'm'), 'text']],
+    'string keys' => [['first' => BootIssue::warning('fixture.invalid', 'm')]],
 ]);

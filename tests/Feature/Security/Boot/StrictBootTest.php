@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Laravel\Mcp\Facades\Mcp;
 use SinaSaeedi\RuntimeMcp\Plugins\Core\CorePlugin;
@@ -10,6 +11,7 @@ use SinaSaeedi\RuntimeMcp\Plugins\Models\ModelsPlugin;
 use SinaSaeedi\RuntimeMcp\Security\Boot\BootGuard;
 use SinaSaeedi\RuntimeMcp\Security\Boot\BootIssue;
 use SinaSaeedi\RuntimeMcp\Security\Boot\BootState;
+use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Boot\AppListenerProvider;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Plugins\FakeOptionalPlugin;
 use SinaSaeedi\RuntimeMcp\Tests\Support\BootCapture;
 use SinaSaeedi\RuntimeMcp\Tests\TestCase;
@@ -124,4 +126,31 @@ it('registers the endpoint and logs nothing when every rule passes', function ()
         ->and(Mcp::getLocalServer('runtime-mcp'))->toBeCallable();
 
     currentTest()->mcpPost('initialize')->assertOk();
+});
+
+it('dispatches the event to a listener of an app provider, which boots after this package (review 01-10 M1)', function () {
+    $provider = null;
+
+    BootCapture::boot(['runtime-mcp.auth.api_keys' => null], 'production', function (Application $app) use (&$provider): void {
+        // As bootstrap/providers.php: an app provider registers after the package providers, so it boots after them.
+        $provider = $app->register(AppListenerProvider::class);
+    });
+
+    $events = $provider instanceof AppListenerProvider ? $provider->events : null;
+
+    expect($events)->toHaveCount(1)
+        ->and(array_map(fn (BootIssue $issue): string => $issue->ruleId, $events[0]->issues ?? []))->toBe(['api_keys.present']);
+});
+
+it('keeps both transports off for an empty environment name, and never throws (01-02 review)', function () {
+    $boot = BootCapture::boot(['runtime-mcp.auth.stdio_principal' => 'local-dev'], '');
+
+    expect($boot->thrown)->toBeNull()
+        ->and(Route::has('runtime-mcp'))->toBeFalse()
+        ->and(Mcp::getLocalServer('runtime-mcp'))->toBeNull()
+        ->and($boot->criticals())->toBe([BootGuard::CRITICAL])
+        ->and($boot->events)->toHaveCount(1)
+        ->and(array_map(fn (BootIssue $issue): string => $issue->ruleId, $boot->events[0]->issues ?? []))->toContain('environment.name');
+
+    currentTest()->mcpPost('initialize')->assertNotFound();
 });

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
 use SinaSaeedi\RuntimeMcp\Plugins\Core\CorePlugin;
+use SinaSaeedi\RuntimeMcp\Security\Boot\BootGuard;
 use SinaSaeedi\RuntimeMcp\Security\Boot\BootIssue;
 use SinaSaeedi\RuntimeMcp\Security\Boot\RuntimeMcpMisconfigured;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Boot\FailingRule;
+use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Plugins\FakeInvalidRulesPlugin;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Plugins\FakeRulesPlugin;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Plugins\FakeThrowingRulesPlugin;
 use SinaSaeedi\RuntimeMcp\Tests\Support\BootCapture;
@@ -45,4 +47,13 @@ it('fails closed when a plugin cannot list its rules', function () {
     expect($boot->thrown)->toBeNull()
         ->and(Route::has('runtime-mcp'))->toBeFalse()
         ->and($boot->events[0]->issues[0]->message ?? null)->toBe('Rule plugins.fake_throwing_rules could not run: RuntimeException.');
+});
+
+it('does not throw for a plugin rule that returns an invalid result in a strict environment (rule 15, review 01-10 M2)', function () {
+    $boot = BootCapture::boot([], 'production', BootCapture::plugins([CorePlugin::class, FakeInvalidRulesPlugin::class]));
+
+    expect($boot->thrown)->toBeNull()
+        ->and(Route::has('runtime-mcp'))->toBeFalse()
+        ->and($boot->criticals())->toBe([BootGuard::CRITICAL])
+        ->and($boot->events[0]->issues[0]->message ?? null)->toBe('Rule fixture.invalid returned an invalid result.');
 });
