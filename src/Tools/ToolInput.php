@@ -19,6 +19,7 @@ final readonly class ToolInput
         return $this->arguments;
     }
 
+    /** An argument sent as null gives $default too (`??`); all() keeps the null. */
     public function get(string $key, mixed $default = null): mixed
     {
         return $this->arguments[$key] ?? $default;
