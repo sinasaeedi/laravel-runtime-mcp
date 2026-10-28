@@ -15,9 +15,10 @@ use Throwable;
 
 /**
  * Spec 5.11, 4.6: what the provider does with the boot report. Strict: the endpoint stays off, one
- * critical line, one BootValidationFailed (throttled), and never a throw (rule 15). Relaxed: throw
- * RuntimeMcpMisconfigured, except while `php artisan runtime-mcp:doctor` boots (01-12): doctor must
- * start exactly when the config is broken. Warnings are logged (throttled) in both.
+ * critical line, one BootValidationFailed once the app has booted (throttled), and never a throw
+ * (rule 15). Relaxed: throw RuntimeMcpMisconfigured, except while `php artisan runtime-mcp:doctor`
+ * boots (01-12): doctor must start exactly when the config is broken. Warnings are logged
+ * (throttled) in both.
  *
  * Logs through Psr\Log\LoggerInterface, the app's default log (as GateWarning, 01-09).
  */
@@ -78,7 +79,9 @@ final class BootGuard
                 'environment' => $environment,
                 'issues' => array_map(fn (BootIssue $issue): array => $issue->toArray(), $report->issues),
             ]));
-            $this->quietly(fn () => $this->events->dispatch(new BootValidationFailed($environment, $report->issues)));
+            // After every provider has booted: an app attaches its listeners in its own providers, and
+            // Laravel boots those after the package providers (review 01-10 M1).
+            $this->app->booted(fn () => $this->quietly(fn () => $this->events->dispatch(new BootValidationFailed($environment, $report->issues))));
         }
 
         return $report;
