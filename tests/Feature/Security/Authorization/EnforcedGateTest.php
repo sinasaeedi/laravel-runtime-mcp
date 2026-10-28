@@ -19,6 +19,7 @@ use SinaSaeedi\RuntimeMcp\Tests\Support\AuditLog;
 use SinaSaeedi\RuntimeMcp\Tests\Support\FixtureTools;
 use SinaSaeedi\RuntimeMcp\Tests\Support\ProtocolEra;
 use SinaSaeedi\RuntimeMcp\Tests\Support\RecordingLogger;
+use SinaSaeedi\RuntimeMcp\Tools\Pipeline\CheckGateStage;
 
 /*
  * Spec 11.2 "Authorization": the Gate enforced in the pipeline even when shouldRegister() is
@@ -100,7 +101,7 @@ it('adds the Gate\'s own message to the note, cut and redacted', function () {
 
     expect(str_starts_with($note, 'Access denied: the Gate `runtime-mcp.echo` does not allow this principal. Ask the platform team. Bearer [redacted:bearer] '))->toBeTrue($note)
         ->and(str_contains($note, 'abcdefgh12345678'))->toBeFalse('The secret in the Gate message was not redacted.')
-        ->and(mb_strlen($note))->toBe(mb_strlen('Access denied: the Gate `runtime-mcp.echo` does not allow this principal. ') + 200 - mb_strlen('abcdefgh12345678') + mb_strlen('[redacted:bearer]'));
+        ->and(mb_strlen($note))->toBe(mb_strlen('Access denied: the Gate `runtime-mcp.echo` does not allow this principal. ') + CheckGateStage::MAX_MESSAGE);
 });
 
 it('denies gate_error with a note that names no cause, and warns once', function () {
@@ -159,3 +160,18 @@ it('runs the tool when the Gate allows, and asks it again on the next call', fun
         ->and($first['data'])->toBe(['text' => 'hi'])
         ->and($second['status'])->toBe('unavailable');
 });
+
+it('redacts the whole Gate message before the cut, so a secret across the cut does not reach the agent in part', function (string $secret, string $marker, string $start) {
+    // The secret starts at character 185 of the Gate message, so the 200-character cut splits it.
+    FixtureTools::serve(gates: false);
+    $prefix = str_repeat('x', 180).' at ';
+    Gate::define('runtime-mcp.echo', fn (): Response => Response::deny($prefix.$secret.' and more'));
+
+    $response = FixtureTools::call('echo', ['text' => 'hi']);
+
+    expect(FixtureTools::envelope($response)['note'])->toBe('Access denied: the Gate `runtime-mcp.echo` does not allow this principal. '.mb_substr($prefix.$marker.' and more', 0, CheckGateStage::MAX_MESSAGE))
+        ->and(str_contains((string) $response->getContent(), $start))->toBeFalse();
+})->with([
+    'a password URL' => ['redis://:Secr3tPassw0rdValue@cache.internal:6379', 'redis://:[redacted:password]@cache.internal:6379', 'Secr3t'],
+    'a GitHub token' => ['ghp_'.str_repeat('A1b2C3d4E5', 4), '[redacted:github_token]', 'ghp_A1b2'],
+]);
