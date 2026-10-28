@@ -65,8 +65,8 @@ it('denies gate_error, and warns, when a Policy typed User meets an unlinked key
     expect($view->reason?->value)->toBe('gate_error')
         ->and($viewAny->reason?->value)->toBe('gate_error')
         ->and($log->messages())->toBe([
-            'runtime-mcp: the view Policy of '.Invoice::class.' (or a Gate::before() callback) threw TypeError for a Principal subject. Type the callback as Principal|User.',
-            'runtime-mcp: the viewAny Policy of '.Invoice::class.' (or a Gate::before() callback) threw TypeError for a Principal subject. Type the callback as Principal|User.',
+            'runtime-mcp: the view Policy of '.Invoice::class.' (or a Gate::before() or Gate::after() callback, or a GateEvaluated listener) threw TypeError for a Principal subject. Type the callback as Principal|User.',
+            'runtime-mcp: the viewAny Policy of '.Invoice::class.' (or a Gate::before() or Gate::after() callback, or a GateEvaluated listener) threw TypeError for a Principal subject. Type the callback as Principal|User.',
         ]);
 });
 
