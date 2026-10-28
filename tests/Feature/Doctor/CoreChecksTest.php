@@ -155,6 +155,20 @@ it('Linked users: reports a broken user provider once, with its class only', fun
     ]]);
 });
 
+it('Linked users: reports a default guard with no user provider, never a missing user', function () {
+    currentTest()->bootWith([
+        'runtime-mcp.auth.link_users' => ['sina' => 'sina@example.com'],
+        'auth.guards.web.provider' => 'admins',
+    ]);
+    Users::create('sina@example.com');
+
+    expect(runCoreCheck(LinkedUsers::class))->toBe([[
+        'fail',
+        'The user provider could not run (LogicException), so every linked key is rejected.',
+        'Check auth.defaults.guard, its user provider, and that the users table exists.',
+    ]]);
+});
+
 // 01-35: only the api_key driver links keys to users, so with another driver no link is resolved.
 it('Linked users: passes with Not used for another driver and no link', function (mixed $driver) {
     currentTest()->bootWith(['runtime-mcp.auth.driver' => $driver]);
