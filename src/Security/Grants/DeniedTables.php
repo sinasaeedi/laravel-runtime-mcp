@@ -33,7 +33,9 @@ final class DeniedTables
         $ignored = [];
 
         foreach ($entries as $entry) {
-            if (! is_string($entry) || $entry === '' || substr_count($entry, '.') > 1) {
+            // "a.b.c", ".sessions", "sessions." and "public." can match no table: doctor reports them.
+            if (! is_string($entry) || $entry === '' || substr_count($entry, '.') > 1
+                || str_starts_with($entry, '.') || str_ends_with($entry, '.')) {
                 $ignored[] = $entry;
 
                 continue;
@@ -82,7 +84,7 @@ final class DeniedTables
         return false;
     }
 
-    /** @return list<mixed> the entries that are not a non-empty string, or have more than one dot */
+    /** @return list<mixed> the entries that are not a non-empty string, have more than one dot, or an empty part */
     public function ignored(): array
     {
         return $this->ignored;
