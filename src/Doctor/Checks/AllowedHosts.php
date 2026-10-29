@@ -11,7 +11,8 @@ use SinaSaeedi\RuntimeMcp\Security\Http\HostRules;
 
 /**
  * Spec 5.4, 01-07: the resolved host list. Empty refuses every request (fail closed), and no boot
- * rule reports it, so doctor does. Counts only: a host can come from .env.
+ * rule reports it, so doctor does. Counts only: a host can come from .env. A bad entry is dropped and
+ * never matches, so it is named by its 1-based position, never its value (as AllowedOrigins).
  */
 final class AllowedHosts implements Check
 {
@@ -33,10 +34,25 @@ final class AllowedHosts implements Check
             )];
         }
 
+        $results = [];
+
+        foreach ($configured ?? [] as $index => $entry) {
+            if (! is_string($entry) || ! HostRules::isHostEntry($entry)) {
+                $results[] = CheckResult::fail(
+                    'allowed_hosts entry '.($index + 1).' is not host or host:port, so it never matches.',
+                    'Write it as example.com or example.com:8443, with no scheme and no path.',
+                );
+            }
+        }
+
         $hosts = HostRules::fromConfig($this->config)->hosts();
 
         if ($hosts === []) {
-            return [CheckResult::fail('Every request is refused.', 'Set APP_URL or runtime-mcp.allowed_hosts.')];
+            $results[] = CheckResult::fail('Every request is refused.', 'Set APP_URL or runtime-mcp.allowed_hosts.');
+        }
+
+        if ($results !== []) {
+            return $results;
         }
 
         $source = $configured === null ? 'the host of APP_URL' : 'runtime-mcp.allowed_hosts';
