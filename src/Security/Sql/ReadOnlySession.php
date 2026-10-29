@@ -90,6 +90,7 @@ final class ReadOnlySession
         $pdo = $connection->getPdo();
         $this->refusePersistent($pdo);
         $emulated = $pdo->getAttribute(PDO::ATTR_EMULATE_PREPARES);
+        $errorMode = $this->throwOnError($pdo);
         $lost = false;
 
         try {
@@ -126,6 +127,9 @@ final class ReadOnlySession
             } else {
                 $this->ledger->resetConnection($connection);
             }
+
+            // Last: a failed reset must throw too, or the next call inherits this session's state.
+            $pdo->setAttribute(PDO::ATTR_ERRMODE, $errorMode);
         }
     }
 
@@ -149,6 +153,7 @@ final class ReadOnlySession
         $pdo = $connection->getPdo();
         $this->refusePersistent($pdo);
         $emulated = $pdo->getAttribute(PDO::ATTR_EMULATE_PREPARES);
+        $errorMode = $this->throwOnError($pdo);
         $level = $connection->transactionLevel();
         $connection->beginTransaction(); // a SAVEPOINT
 
@@ -167,7 +172,21 @@ final class ReadOnlySession
             } catch (Throwable) {
                 $this->ledger->discard($connection);
             }
+
+            $pdo->setAttribute(PDO::ATTR_ERRMODE, $errorMode);
         }
+    }
+
+    /**
+     * A connection's options can set PDO::ERRMODE_SILENT. Then a denied column, a syntax error or a timeout
+     * gives an empty result instead of an exception (rule 11), so the frame always throws. Returns the old mode.
+     */
+    private function throwOnError(PDO $pdo): mixed
+    {
+        $mode = $pdo->getAttribute(PDO::ATTR_ERRMODE);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        return $mode;
     }
 
     /**

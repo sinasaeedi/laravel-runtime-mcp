@@ -320,3 +320,41 @@ it('QP18 Case B: the chain runs in savepoints inside the outer read-only transac
 
     app(SessionLedger::class)->reset(ReadOnlyRole::CONNECTION);
 });
+
+it('QP19 a 42601 that the query raises as it runs never reaches the bare step', function (string $sql) {
+    pgsqlRunnerRole();
+
+    // The query fails only in the wrapped and the cursor forms, so a bare run would read all 5000 rows into PHP.
+    [$e] = pgsqlRunnerRejected($sql);
+
+    expect($e)->toBeInstanceOf(QueryFailed::class)
+        ->and($e->sqlState)->toBe('42601')
+        ->and(pgsqlRunnerAttempts($sql))->toBe([LimitStrategy::Wrapped, LimitStrategy::Cursor]);
+})->with([
+    'query_to_xml()' => ["SELECT g, CASE WHEN position('runtime' || '_mcp' IN current_query()) > 0 THEN query_to_xml('SELEC', true, false, '') END AS t FROM generate_series(1, 5000) g"],
+    'to_tsquery()' => ["SELECT g, CASE WHEN position('runtime' || '_mcp' IN current_query()) > 0 THEN to_tsquery('!')::text END AS t FROM generate_series(1, 5000) g"],
+]);
+
+it('QP20 a connection with PDO::ERRMODE_SILENT still throws inside the frame, and gets its mode back', function (bool $outer) {
+    pgsqlRunnerRole();
+    config()->set('database.connections.'.ReadOnlyRole::CONNECTION.'.options', [PDO::ATTR_ERRMODE => PDO::ERRMODE_SILENT]);
+    DB::purge(ReadOnlyRole::CONNECTION);
+    $connection = DB::connection(ReadOnlyRole::CONNECTION);
+
+    if ($outer) {
+        $connection->beginTransaction();
+        $connection->statement('SET TRANSACTION READ ONLY');
+    }
+
+    // Silent, a denied column and a timeout were an empty result (rule 11).
+    [$denied] = pgsqlRunnerRejected('SELECT password FROM users');
+    [$timedOut] = pgsqlRunnerRejected('SELECT pg_sleep(2)');
+
+    expect($denied)->toBeInstanceOf(QueryPermissionDenied::class)
+        ->and($timedOut)->toBeInstanceOf(QueryTimedOut::class)
+        ->and($connection->getPdo()->getAttribute(PDO::ATTR_ERRMODE))->toBe(PDO::ERRMODE_SILENT);
+
+    if ($outer) {
+        app(SessionLedger::class)->reset(ReadOnlyRole::CONNECTION);
+    }
+})->with(['Case A' => [false], 'Case B' => [true]]);
