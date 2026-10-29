@@ -110,7 +110,8 @@ final class ReadOnlyRolePrivileges implements Check
     {
         $privileges = $driver === 'pgsql'
             ? new PostgresPrivileges($connection)
-            : new MySqlPrivileges($connection, $this->db->connection());
+            // The default connection is resolved inside check 3: a lookup that throws here would leave run().
+            : new MySqlPrivileges($connection, fn (): Connection => $this->db->connection());
 
         return [
             $this->result(
