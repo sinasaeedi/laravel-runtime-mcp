@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Assert;
 use SinaSaeedi\RuntimeMcp\Console\DoctorCommand;
 use SinaSaeedi\RuntimeMcp\Doctor\CheckResult;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\ReadOnlyRolePrivileges;
@@ -61,6 +62,14 @@ function pgsqlPrivilegesValue(string $connection, string $sql, array $bindings =
     return is_object($row) ? (array_values((array) $row)[0] ?? null) : null;
 }
 
+/** What check 1 revokes: MAINTAIN too on PostgreSQL 17 and later (2026-10-29 re-review). */
+function pgsqlPrivilegesWrite(): string
+{
+    $version = pgsqlPrivilegesValue('testing_pgsql', "select current_setting('server_version_num')::int");
+
+    return is_numeric($version) && (int) $version >= 170000 ? 'INSERT, UPDATE, DELETE, TRUNCATE, MAINTAIN' : 'INSERT, UPDATE, DELETE, TRUNCATE';
+}
+
 function pgsqlQuoted(ReadOnlyRole $role): string
 {
     return RoleSqlGenerator::quotePostgres($role->name());
@@ -91,7 +100,7 @@ it('check 1: fails for each write privilege on a table, with the REVOKE, and exi
     expect($write->status->value)->toBe('fail')
         ->and($write->privilege)->toBeTrue()
         ->and($write->message)->toBe('The read-only role can write or change the schema: public.orders.')
-        ->and($write->fix)->toBe('REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE "public"."orders" FROM '.pgsqlQuoted($role).";\n      Run doctor again after the fix: it shows what is left.")
+        ->and($write->fix)->toBe('REVOKE '.pgsqlPrivilegesWrite().' ON TABLE "public"."orders" FROM '.pgsqlQuoted($role).";\n      Run doctor again after the fix: it shows what is left.")
         ->and($code)->toBe(1)
         ->and($output)->toContain('✗ Read-only role');
 })->with(['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE']);
@@ -238,7 +247,7 @@ it('names a privilege that PUBLIC holds, with a REVOKE … FROM PUBLIC', functio
     [$write, , $masked] = pgsqlPrivilegeResults();
 
     expect($write->message)->toBe('The read-only role can write or change the schema: public.orders (through PUBLIC).')
-        ->and($write->fix)->toStartWith('REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE "public"."orders" FROM PUBLIC;')
+        ->and($write->fix)->toStartWith('REVOKE '.pgsqlPrivilegesWrite().' ON TABLE "public"."orders" FROM PUBLIC;')
         ->and($masked->message)->toBe('The read-only role can read masked columns or denied tables: public.users.password (through PUBLIC).')
         ->and($masked->fix)->toStartWith('REVOKE SELECT ("password") ON TABLE "public"."users" FROM PUBLIC;');
 });
@@ -327,4 +336,98 @@ it('changes no grant: the privilege is still there after doctor ran', function (
 
     pgsqlPrivilegesDoctor();
     expect(pgsqlPrivilegesValue('testing_pgsql', "select has_table_privilege(?, 'orders', 'INSERT')", [$role->name()]))->toBeTrue();
+});
+
+it('names only PUBLIC when PUBLIC holds the privilege, not a member role that holds nothing (2026-10-29 triage)', function () {
+    $role = pgsqlPrivilegesRole();
+    $member = 'rmcp_m_'.bin2hex(random_bytes(4));
+    currentTest()->beforeApplicationDestroyed(function () use ($member): void {
+        pgsqlPrivilegesGrant('REVOKE INSERT ON orders FROM PUBLIC');
+        pgsqlPrivilegesGrant('REVOKE SELECT (password) ON users FROM PUBLIC');
+        pgsqlPrivilegesGrant("DROP ROLE IF EXISTS {$member}");
+    });
+    pgsqlPrivilegesGrant("CREATE ROLE {$member} NOLOGIN");
+    pgsqlPrivilegesGrant("GRANT {$member} TO ".pgsqlQuoted($role));
+    pgsqlPrivilegesGrant('GRANT INSERT ON orders TO PUBLIC');
+    pgsqlPrivilegesGrant('GRANT SELECT (password) ON users TO PUBLIC');
+
+    [$write, , $masked] = pgsqlPrivilegeResults();
+
+    expect($write->message)->toBe('The read-only role can write or change the schema: public.orders (through PUBLIC).')
+        ->and($write->fix)->toBe('REVOKE '.pgsqlPrivilegesWrite().' ON TABLE "public"."orders" FROM PUBLIC;'."\n      Run doctor again after the fix: it shows what is left.")
+        ->and($masked->message)->toBe('The read-only role can read masked columns or denied tables: public.users.password (through PUBLIC).')
+        ->and($masked->fix)->toBe('REVOKE SELECT ("password") ON TABLE "public"."users" FROM PUBLIC;'."\n      Run doctor again after the fix: it shows what is left.");
+});
+
+it('revokes the role that was granted, for a privilege of a role in that role, and that fix passes (2026-10-29 triage)', function (string $inherit) {
+    $role = pgsqlPrivilegesRole();
+    $outer = 'rmcp_outer_'.bin2hex(random_bytes(4));
+    $inner = 'rmcp_inner_'.bin2hex(random_bytes(4));
+    currentTest()->beforeApplicationDestroyed(function () use ($outer, $inner): void {
+        pgsqlPrivilegesGrant("DROP OWNED BY {$inner}");
+        pgsqlPrivilegesGrant("DROP ROLE IF EXISTS {$outer}");
+        pgsqlPrivilegesGrant("DROP ROLE IF EXISTS {$inner}");
+    });
+    pgsqlPrivilegesGrant("CREATE ROLE {$outer} NOLOGIN {$inherit}");
+    pgsqlPrivilegesGrant("CREATE ROLE {$inner} NOLOGIN");
+    pgsqlPrivilegesGrant("GRANT INSERT ON orders TO {$inner}");
+    pgsqlPrivilegesGrant("GRANT {$inner} TO {$outer}");
+    pgsqlPrivilegesGrant("GRANT {$outer} TO ".pgsqlQuoted($role));
+
+    $write = pgsqlPrivilegeResults()[0];
+    $fix = "REVOKE \"{$outer}\" FROM ".pgsqlQuoted($role).';';
+
+    expect($write->message)->toContain("public.orders (through {$inner})")
+        ->and($write->fix)->toBe("{$fix}\n      Run doctor again after the fix: it shows what is left.");
+
+    pgsqlPrivilegesGrant($fix);
+
+    expect(pgsqlPrivilegeResults()[0]->status->value)->toBe('pass');
+})->with(['an INHERIT role' => ['INHERIT'], 'a NOINHERIT role' => ['NOINHERIT']]);
+
+it('check 2: revokes the role that was granted, for a superuser role in that role', function () {
+    $role = pgsqlPrivilegesRole();
+    $outer = 'rmcp_outer_'.bin2hex(random_bytes(4));
+    $super = 'rmcp_su_'.bin2hex(random_bytes(4));
+    currentTest()->beforeApplicationDestroyed(function () use ($outer, $super): void {
+        pgsqlPrivilegesGrant("DROP ROLE IF EXISTS {$outer}");
+        pgsqlPrivilegesGrant("DROP ROLE IF EXISTS {$super}");
+    });
+    pgsqlPrivilegesGrant("CREATE ROLE {$outer} NOLOGIN");
+    pgsqlPrivilegesGrant("CREATE ROLE {$super} SUPERUSER NOLOGIN");
+    pgsqlPrivilegesGrant("GRANT {$super} TO {$outer}");
+    pgsqlPrivilegesGrant("GRANT {$outer} TO ".pgsqlQuoted($role));
+
+    $superuser = pgsqlPrivilegeResults()[1];
+
+    expect($superuser->message)->toBe("The read-only role has superuser rights: member of {$super} (SUPERUSER).")
+        ->and($superuser->fix)->toBe("REVOKE \"{$outer}\" FROM ".pgsqlQuoted($role).";\n      Run doctor again after the fix: it shows what is left.");
+});
+
+it('check 1: fails for MAINTAIN, which a read-only transaction does not stop (PostgreSQL 17)', function () {
+    if (! str_contains(pgsqlPrivilegesWrite(), 'MAINTAIN')) {
+        Assert::markTestSkipped('MAINTAIN is new in PostgreSQL 17.');
+    }
+
+    $role = pgsqlPrivilegesRole();
+    pgsqlPrivilegesGrant('GRANT MAINTAIN ON orders TO '.pgsqlQuoted($role));
+
+    // The premise: inside a read-only transaction the role takes a lock that blocks the app on the table.
+    $pdo = DB::connection(ReadOnlyRole::CONNECTION)->getPdo();
+    $pdo->exec('BEGIN READ ONLY');
+    $pdo->exec('LOCK TABLE orders IN ACCESS EXCLUSIVE MODE');
+    $lock = pgsqlPrivilegesValue(ReadOnlyRole::CONNECTION, "select mode from pg_locks where relation = 'orders'::regclass and pid = pg_backend_pid()");
+    $pdo->exec('ROLLBACK');
+    DB::purge(ReadOnlyRole::CONNECTION);
+
+    $write = pgsqlPrivilegeResults()[0];
+    $fix = 'REVOKE INSERT, UPDATE, DELETE, TRUNCATE, MAINTAIN ON TABLE "public"."orders" FROM '.pgsqlQuoted($role).';';
+
+    expect($lock)->toBe('AccessExclusiveLock')
+        ->and($write->message)->toBe('The read-only role can write or change the schema: public.orders.')
+        ->and($write->fix)->toBe("{$fix}\n      Run doctor again after the fix: it shows what is left.");
+
+    pgsqlPrivilegesGrant($fix);
+
+    expect(pgsqlPrivilegeResults()[0]->status->value)->toBe('pass');
 });
