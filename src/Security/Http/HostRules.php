@@ -142,6 +142,15 @@ final class HostRules
         return $port === (self::DEFAULT_PORTS[$match[1]] ?? null) ? $origin : $origin.':'.$port;
     }
 
+    /**
+     * "host" or "host:port" that fromConfig() keeps. False for an entry it drops: a scheme, a path,
+     * a space, or a port outside 1-65535 (01-12 reports such entries).
+     */
+    public static function isHostEntry(string $entry): bool
+    {
+        return self::parseHost($entry) !== null;
+    }
+
     /** @return array{host: string, port: int|null}|null null for an entry that can never match */
     private static function parseHost(string $entry): ?array
     {

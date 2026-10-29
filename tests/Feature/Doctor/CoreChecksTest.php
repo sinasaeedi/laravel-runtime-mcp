@@ -263,7 +263,6 @@ it('Allowed hosts: fails when the resolved list is empty', function (array $conf
 })->with([
     'no APP_URL' => [['app.url' => '']],
     'APP_URL with no scheme' => [['app.url' => 'app.test']],
-    'only bad entries' => [['runtime-mcp.allowed_hosts' => ['bad host!', 'a.test:99999']]],
     'an empty list' => [['runtime-mcp.allowed_hosts' => []]],
 ]);
 
@@ -548,3 +547,62 @@ it('every core result has a fix unless it passes', function () {
         }
     }
 });
+
+it('Audit log: fails when the log file exists but is not writable (01-12 re-review)', function (string $driver, string $basename) {
+    if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+        currentTest()->markTestSkipped('root can write to every file');
+    }
+
+    $directory = sys_get_temp_dir().'/runtime-mcp-doctor-'.bin2hex(random_bytes(4));
+    mkdir($directory, 0755);
+    $file = $directory.'/'.str_replace('{date}', date('Y-m-d'), $basename);
+    touch($file);
+
+    try {
+        currentTest()->bootWith(['logging.channels.runtime-mcp' => ['driver' => $driver, 'path' => $directory.'/audit.log']]);
+
+        expect(runCoreCheck(AuditLog::class))->toBe([['pass', "Channel `runtime-mcp` writes to {$directory}.", null]]);
+
+        chmod($file, 0444);
+
+        expect(runCoreCheck(AuditLog::class))->toBe([[
+            'fail',
+            "The audit cannot be written to {$file}, so tool results are withheld.",
+            'Make the file writable for the user that runs PHP.',
+        ]]);
+    } finally {
+        chmod($file, 0644);
+        unlink($file);
+        rmdir($directory);
+    }
+})->with([
+    'single' => ['single', 'audit.log'],
+    'daily, the file of today' => ['daily', 'audit-{date}.log'],
+]);
+
+it('Allowed hosts: names each bad entry by its position, never its value (01-12 re-review)', function (array $hosts, array $expected) {
+    /** @var list<mixed> $hosts */
+    /** @var list<int|string> $expected */
+    currentTest()->bootWith(['runtime-mcp.allowed_hosts' => $hosts]);
+
+    $bad = fn (int $n): array => [
+        'fail',
+        "allowed_hosts entry {$n} is not host or host:port, so it never matches.",
+        'Write it as example.com or example.com:8443, with no scheme and no path.',
+    ];
+    $results = runCoreCheck(AllowedHosts::class);
+
+    expect($results)->toBe(array_map(fn (int|string $n): array => $n === 'empty'
+        ? ['fail', 'Every request is refused.', 'Set APP_URL or runtime-mcp.allowed_hosts.']
+        : $bad((int) $n), $expected));
+
+    foreach ($hosts as $host) {
+        if (is_string($host)) {
+            expect(str_contains(implode("\n", array_column($results, 1)), $host))->toBeFalse("the check printed {$host}");
+        }
+    }
+})->with([
+    'one typo among good hosts' => [['a.test', 'https://b.test', 'c.test:8443'], [2]],
+    'a port out of range and a non-string' => [['a.test:99999', 'b.test', 42], [1, 3]],
+    'only bad entries' => [['bad host!', 'a.test:99999'], [1, 2, 'empty']],
+]);
