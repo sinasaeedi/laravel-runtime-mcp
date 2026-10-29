@@ -349,3 +349,81 @@ it('P15 Case B: native prepares are forced in the savepoint too, and the app set
 
     $connection->rollBack();
 });
+
+it('P16 a connection that cannot be opened: QueryFailed with a fixed message, never the host, the port or the role', function () {
+    $role = pgsqlSessionRole(['database.connections.'.ReadOnlyRole::CONNECTION.'.password' => 'wrong']);
+    $ran = false;
+    $thrown = null;
+
+    try {
+        pgsqlSessionRun(function () use (&$ran): bool {
+            $ran = true;
+
+            return true;
+        });
+    } catch (QueryRejected $e) {
+        $thrown = $e;
+    }
+
+    // libpq: 'connection to server at "127.0.0.1", port 55532 failed: FATAL: password authentication failed for user "…"'.
+    expect($thrown)->toBeInstanceOf(QueryFailed::class)
+        ->and($thrown?->getMessage())->toBe(ReadOnlySession::CONNECTION_FAILED)
+        ->and($thrown?->driverCode)->toBeNull()
+        ->and($ran)->toBeFalse()
+        ->and(str_contains((string) $thrown?->getPrevious()?->getMessage(), $role->name()))->toBeTrue();
+});
+
+it('P17 a persistent connection is refused before any SQL runs: a discard() would not end its session', function () {
+    pgsqlSessionRole(['database.connections.'.ReadOnlyRole::CONNECTION.'.options' => [PDO::ATTR_PERSISTENT => true]]);
+    $ran = false;
+    $thrown = null;
+
+    try {
+        pgsqlSessionRun(function () use (&$ran): bool {
+            $ran = true;
+
+            return true;
+        });
+    } catch (QueryRejected $e) {
+        $thrown = $e;
+    }
+
+    expect($thrown)->toBeInstanceOf(QueryFailed::class)
+        ->and($thrown?->getMessage())->toBe(ReadOnlySession::PERSISTENT)
+        ->and($ran)->toBeFalse();
+});
+
+it('P18 a connection lost while the frame starts, whose new session cannot be opened: SESSION_LOST, never the connect error', function () {
+    $role = pgsqlSessionRole();
+    $connection = DB::connection(ReadOnlyRole::CONNECTION);
+    $pid = pgsqlSessionBackendPid($connection);
+    $killed = false;
+    $ran = false;
+
+    // Laravel reconnects inside beginTransaction(); the wrong password makes that connect fail.
+    $connection->beforeStartingTransaction(function () use ($pid, &$killed): void {
+        if (! $killed) {
+            $killed = true;
+            config()->set('database.connections.'.ReadOnlyRole::CONNECTION.'.password', 'wrong');
+            DB::connection('testing_pgsql')->select('SELECT pg_terminate_backend(?)', [$pid]);
+        }
+    });
+
+    $thrown = null;
+
+    try {
+        pgsqlSessionRun(function () use (&$ran): bool {
+            $ran = true;
+
+            return true;
+        });
+    } catch (QueryRejected $e) {
+        $thrown = $e;
+    }
+
+    expect($killed)->toBeTrue()
+        ->and($thrown)->toBeInstanceOf(QueryFailed::class)
+        ->and($thrown?->getMessage())->toBe(ReadOnlySession::SESSION_LOST)
+        ->and($ran)->toBeFalse()
+        ->and(str_contains((string) $thrown?->getPrevious()?->getMessage(), $role->name()))->toBeTrue();
+});
