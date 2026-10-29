@@ -19,23 +19,42 @@ use Illuminate\Database\Connection;
  * All schemas but the system ones are checked, not only the search_path: a schema-qualified name
  * reaches any schema.
  *
- * @phpstan-type Grant array{grantee: string, self: bool, owner: bool, tableLevel: bool}
+ * @phpstan-type Grant array{grantee: string, self: bool, owner: bool, tableLevel: bool, direct: list<string>}
  */
 final class PostgresPrivileges implements RolePrivileges
 {
     public const WRITE = 'INSERT, UPDATE, DELETE, TRUNCATE';
 
+    /**
+     * PostgreSQL 17's MAINTAIN (VACUUM, ANALYZE, REINDEX, CLUSTER, LOCK TABLE): a read-only transaction
+     * does not stop REINDEX or LOCK TABLE … IN ACCESS EXCLUSIVE MODE, which blocks the app on that
+     * table (probed on 17.11, 2026-10-29). Older servers have no such privilege.
+     */
+    public const MAINTAIN = 'MAINTAIN';
+
+    /**
+     * The roles granted to the role itself that make it a member of r (r too, when it is granted
+     * directly), as JSON: "REVOKE r" does nothing for a role r that is only reached through another.
+     */
+    private const DIRECT = <<<'SQL'
+        (select json_agg(distinct d.rolname::text order by d.rolname::text)
+         from pg_auth_members m
+         join pg_roles d on d.oid = m.roleid
+         where m.member = (select u.oid from pg_roles u where u.rolname = current_user)
+           and pg_has_role(d.oid, r.oid, 'MEMBER'))::text
+        SQL;
+
     /** The role, the roles it is a member of, and PUBLIC ("public" is PUBLIC for has_*_privilege()). */
-    private const GRANTEES = <<<'SQL'
+    private const GRANTEES = '
         with grantees as (
-            select r.rolname::text as grantee, r.rolname = current_user as self
+            select r.rolname::text as grantee, r.rolname = current_user as self, '.self::DIRECT.' as direct
             from pg_roles r
-            where pg_has_role(current_user, r.oid, 'MEMBER')
+            where pg_has_role(current_user, r.oid, \'MEMBER\')
               and (r.rolname = current_user or not (select s.rolsuper from pg_roles s where s.rolname = current_user))
             union all
-            select 'public', false
+            select \'public\', false, null
         )
-        SQL;
+        ';
 
     private const USER_SCHEMAS = <<<'SQL'
         n.nspname not in ('pg_catalog', 'information_schema') and n.nspname not like 'pg\_%'
@@ -45,14 +64,15 @@ final class PostgresPrivileges implements RolePrivileges
 
     public function writes(): array
     {
+        $write = $this->write();
         $rows = $this->connection->select(self::GRANTEES.'
-            select n.nspname as schema, c.relname as name, g.grantee, g.self,
+            select n.nspname as schema, c.relname as name, g.grantee, g.self, g.direct,
                    pg_get_userbyid(c.relowner) = current_user as owner
             from pg_class c
             join pg_namespace n on n.oid = c.relnamespace
             cross join grantees g
             where c.relkind in (\'r\', \'p\') and '.self::USER_SCHEMAS.'
-              and has_table_privilege(g.grantee::name, c.oid, \''.self::WRITE.'\')
+              and has_table_privilege(g.grantee::name, c.oid, \''.$write.'\')
             order by n.nspname, c.relname, g.self desc, g.grantee');
 
         $role = $this->role();
@@ -70,16 +90,16 @@ final class PostgresPrivileges implements RolePrivileges
             $label = "{$schema}.{$name}";
             $table = self::qualified($schema, $name);
 
-            foreach (self::through($grants) as $grantee) {
-                $findings[] = $grantee === 'public'
-                    ? new PrivilegeFinding("{$label} (through PUBLIC)", 'REVOKE '.self::WRITE." ON TABLE {$table} FROM PUBLIC;")
-                    : new PrivilegeFinding("{$label} (through {$grantee})", self::revokeRole($grantee, $role));
+            foreach (self::through($grants) as $grant) {
+                $findings[] = $grant['grantee'] === 'public'
+                    ? new PrivilegeFinding("{$label} (through PUBLIC)", "REVOKE {$write} ON TABLE {$table} FROM PUBLIC;")
+                    : new PrivilegeFinding("{$label} (through {$grant['grantee']})", self::revokeRole($grant['grantee'], $grant['direct'], $role));
             }
 
             if (self::through($grants) === [] && $grants[0]['self']) {
                 $findings[] = $grants[0]['owner']
                     ? self::owned($label, $table)
-                    : new PrivilegeFinding($label, 'REVOKE '.self::WRITE." ON TABLE {$table} FROM ".RoleSqlGenerator::quotePostgres($role).';');
+                    : new PrivilegeFinding($label, "REVOKE {$write} ON TABLE {$table} FROM ".RoleSqlGenerator::quotePostgres($role).';');
             }
         }
 
@@ -88,13 +108,13 @@ final class PostgresPrivileges implements RolePrivileges
 
     public function superuser(): array
     {
-        $rows = $this->connection->select(<<<'SQL'
-            select r.rolname as role, r.rolname = current_user as self, r.rolsuper as super, r.rolbypassrls as bypass
+        $rows = $this->connection->select('
+            select r.rolname as role, r.rolname = current_user as self, r.rolsuper as super, r.rolbypassrls as bypass,
+                   '.self::DIRECT.' as direct
             from pg_roles r
-            where pg_has_role(current_user, r.oid, 'MEMBER') and (r.rolsuper or r.rolbypassrls)
+            where pg_has_role(current_user, r.oid, \'MEMBER\') and (r.rolsuper or r.rolbypassrls)
               and (r.rolname = current_user or not (select s.rolsuper from pg_roles s where s.rolname = current_user))
-            order by r.rolname = current_user desc, r.rolname
-            SQL);
+            order by r.rolname = current_user desc, r.rolname');
 
         $role = $this->role();
         $findings = [];
@@ -109,7 +129,7 @@ final class PostgresPrivileges implements RolePrivileges
                     "{$name}: ".implode(', ', $rights),
                     'ALTER ROLE '.RoleSqlGenerator::quotePostgres($name).' '.implode(' ', array_map(fn (string $right): string => 'NO'.$right, $rights)).';',
                 )
-                : new PrivilegeFinding("member of {$name} (".implode(', ', $rights).')', self::revokeRole($name, $role));
+                : new PrivilegeFinding("member of {$name} (".implode(', ', $rights).')', self::revokeRole($name, self::direct($row['direct'] ?? null), $role));
         }
 
         return $findings;
@@ -144,7 +164,7 @@ final class PostgresPrivileges implements RolePrivileges
         $readable = [];
 
         foreach ($this->connection->select(self::GRANTEES.'
-            select c.oid, a.attname as column, g.grantee, g.self,
+            select c.oid, a.attname as column, g.grantee, g.self, g.direct,
                    pg_get_userbyid(c.relowner) = current_user as owner,
                    has_table_privilege(g.grantee::name, c.oid, \'SELECT\') as table_level
             from pg_class c
@@ -196,10 +216,10 @@ final class PostgresPrivileges implements RolePrivileges
 
         $findings = [];
 
-        foreach (self::through($grants) as $grantee) {
-            $findings[] = $grantee === 'public'
+        foreach (self::through($grants) as $grant) {
+            $findings[] = $grant['grantee'] === 'public'
                 ? new PrivilegeFinding("{$label} (denied table, through PUBLIC)", "REVOKE ALL ON TABLE {$table} FROM PUBLIC;")
-                : new PrivilegeFinding("{$label} (denied table, through {$grantee})", self::revokeRole($grantee, $role));
+                : new PrivilegeFinding("{$label} (denied table, through {$grant['grantee']})", self::revokeRole($grant['grantee'], $grant['direct'], $role));
         }
 
         if ($findings === []) {
@@ -226,10 +246,10 @@ final class PostgresPrivileges implements RolePrivileges
             $item = "{$label}.{$column}";
             $through = self::through($columns[$column]);
 
-            foreach ($through as $grantee) {
-                $findings[] = $grantee === 'public'
+            foreach ($through as $grant) {
+                $findings[] = $grant['grantee'] === 'public'
                     ? new PrivilegeFinding("{$item} (through PUBLIC)", self::revokeSelect($table, $columns[$column], [$column], 'PUBLIC'))
-                    : new PrivilegeFinding("{$item} (through {$grantee})", self::revokeRole($grantee, $role));
+                    : new PrivilegeFinding("{$item} (through {$grant['grantee']})", self::revokeRole($grant['grantee'], $grant['direct'], $role));
             }
 
             if ($through === []) {
@@ -282,24 +302,29 @@ final class PostgresPrivileges implements RolePrivileges
     }
 
     /**
-     * The grantees other than the role itself (member roles, PUBLIC), in row order. When one of them
-     * holds the privilege, revoking the role's own grant would not be enough, so it is named first;
-     * after that fix, the next doctor run shows what is left.
+     * The grantees other than the role itself (member roles, PUBLIC), in row order, one row each. When
+     * one of them holds the privilege, revoking the role's own grant would not be enough, so it is named
+     * first; after that fix, the next doctor run shows what is left. When PUBLIC holds it, only PUBLIC
+     * is named: every role holds what PUBLIC holds, so a member role's answer says nothing more.
      *
      * @param  list<Grant>  $grants
-     * @return list<string>
+     * @return list<Grant>
      */
     private static function through(array $grants): array
     {
-        $names = [];
+        $through = [];
 
         foreach ($grants as $grant) {
+            if ($grant['grantee'] === 'public') {
+                return [$grant];
+            }
+
             if (! $grant['self']) {
-                $names[] = $grant['grantee'];
+                $through[$grant['grantee']] ??= $grant;
             }
         }
 
-        return array_values(array_unique($names));
+        return array_values($through);
     }
 
     /** @param  list<Grant>  $rows */
@@ -335,14 +360,32 @@ final class PostgresPrivileges implements RolePrivileges
         );
     }
 
-    private static function revokeRole(string $member, string $role): string
+    /**
+     * The REVOKE of each role granted to the role itself that leads to $member: for a role that is
+     * only reached through another, "REVOKE <member>" does nothing.
+     *
+     * @param  list<string>  $direct
+     */
+    private static function revokeRole(string $member, array $direct, string $role): string
     {
-        return 'REVOKE '.RoleSqlGenerator::quotePostgres($member).' FROM '.RoleSqlGenerator::quotePostgres($role).';';
+        return implode(' ', array_map(
+            fn (string $granted): string => 'REVOKE '.RoleSqlGenerator::quotePostgres($granted).' FROM '.RoleSqlGenerator::quotePostgres($role).';',
+            $direct === [] ? [$member] : $direct,
+        ));
     }
 
     private static function qualified(string $schema, string $name): string
     {
         return RoleSqlGenerator::quotePostgres($schema).'.'.RoleSqlGenerator::quotePostgres($name);
+    }
+
+    /** The privileges check 1 asks for: WRITE, and MAINTAIN on PostgreSQL 17 and later. */
+    private function write(): string
+    {
+        $row = $this->connection->selectOne("select current_setting('server_version_num')::int as version");
+        $version = is_object($row) ? ((array) $row)['version'] ?? null : null;
+
+        return is_numeric($version) && (int) $version >= 170000 ? self::WRITE.', '.self::MAINTAIN : self::WRITE;
     }
 
     private function role(): string
@@ -363,7 +406,16 @@ final class PostgresPrivileges implements RolePrivileges
             'self' => ($row['self'] ?? null) === true,
             'owner' => ($row['owner'] ?? null) === true,
             'tableLevel' => ($row['table_level'] ?? null) === true,
+            'direct' => self::direct($row['direct'] ?? null),
         ];
+    }
+
+    /** @return list<string> the JSON list of DIRECT */
+    private static function direct(mixed $value): array
+    {
+        $names = is_string($value) ? json_decode($value, true) : null;
+
+        return is_array($names) ? array_values(array_filter($names, is_string(...))) : [];
     }
 
     private static function text(mixed $value): string
