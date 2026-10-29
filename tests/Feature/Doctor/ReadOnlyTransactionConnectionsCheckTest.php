@@ -82,7 +82,7 @@ it('RD6 fails when database.default names no connection, and checks the default 
         ])[0][1])->toBe('Connection `ro_other` uses the `sqlsrv` driver, which has no read-only transaction, so every tool call fails.');
 });
 
-it('RD7 is a plain Fail, not a privilege check, and comes last, after StatementTimeout', function () {
+it('RD7 is a plain Fail, not a privilege check, and comes right after StatementTimeout', function () {
     $result = (function (): CheckResult {
         currentTest()->bootWith(['runtime-mcp.read_only_transactions.connections' => 'x'], 'local');
 
@@ -90,7 +90,6 @@ it('RD7 is a plain Fail, not a privilege check, and comes last, after StatementT
     })();
 
     expect($result->privilege)->toBeFalse()
-        ->and(Doctor::CHECKS[array_key_last(Doctor::CHECKS)])->toBe(ReadOnlyTransactionConnections::class)
         ->and(array_search(ReadOnlyTransactionConnections::class, Doctor::CHECKS, true))->toBe(array_search(StatementTimeout::class, Doctor::CHECKS, true) + 1)
         ->and(app(ReadOnlyTransactionConnections::class)->title())->toBe('Read-only transactions');
 });
