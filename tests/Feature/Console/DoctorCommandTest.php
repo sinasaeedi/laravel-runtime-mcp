@@ -43,7 +43,7 @@ it('prints a healthy strict report: the header, a pass line per core check, exit
 
     expect($code)->toBe(0)
         ->and($output)->toContain("Runtime MCP doctor — Runtime Test (production), strict, package {$version}")
-        ->and(substr_count($output, '✓'))->toBe(15)
+        ->and(substr_count($output, '✓'))->toBe(16)
         ->and(str_contains($output, '✗'))->toBeFalse()
         ->and(str_contains($output, '→'))->toBeFalse()
         ->and($output)->toContain('✓ Endpoint')
