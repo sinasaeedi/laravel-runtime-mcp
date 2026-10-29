@@ -24,8 +24,9 @@ class MySqlFrame implements SessionFrame
 {
     private const READ_ONLY_CODE = 1792;
 
-    // Table, column and database privilege refused (1044: Sina, 2026-10-21, for CREATE TEMPORARY TABLE).
-    private const PERMISSION_CODES = [1142, 1143, 1044];
+    // Table, column and database privilege refused (1044: Sina, 2026-10-21, for CREATE TEMPORARY TABLE),
+    // and EXECUTE on a routine (1370: 01-14 re-review, 2026-10-29). PostgreSQL gives 42501 for each.
+    private const PERMISSION_CODES = [1142, 1143, 1044, 1370];
 
     public function open(Connection $connection, int $timeoutMs): void
     {
