@@ -58,11 +58,13 @@ final class MySqlGrantParser
         $privileges = [];
 
         foreach (self::split(substr($head, 0, $on[1]), ',') as $item) {
-            $privilege = self::privilege($item);
-
-            if ($privilege !== null) {
-                $privileges[] = $privilege;
+            if (trim($item) === '') {
+                continue;
             }
+
+            // A name this parser cannot read is kept as written: check 1 is an allow-list, so it names
+            // it instead of passing it (2026-10-29 re-review).
+            $privileges[] = self::privilege($item) ?? ['name' => (string) preg_replace('/\s+/', ' ', trim($item)), 'columns' => null];
         }
 
         $target = trim(substr($head, $on[1] + strlen($on[0])));
