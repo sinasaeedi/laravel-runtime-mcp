@@ -56,6 +56,7 @@ it('X2 maps MySQL by error number, and keeps the number', function (int $code, s
     'table privilege' => [1142, '42000', QueryPermissionDenied::class],
     'column privilege' => [1143, '42000', QueryPermissionDenied::class],
     'database privilege (Sina, 2026-10-21)' => [1044, '42000', QueryPermissionDenied::class],
+    'routine privilege (01-14 re-review)' => [1370, '42000', QueryPermissionDenied::class],
     'syntax' => [1064, '42000', QueryFailed::class],
     'MariaDB timeout is not MySQL timeout' => [1969, '70100', QueryFailed::class],
     'unknown variable' => [1193, 'HY000', QueryFailed::class],
@@ -70,6 +71,7 @@ it('X3 maps MariaDB as MySQL, but with its own timeout number', function (int $c
     'read-only transaction' => [1792, '25006', ReadOnlyViolation::class],
     'table privilege' => [1142, '42000', QueryPermissionDenied::class],
     'database privilege' => [1044, '42000', QueryPermissionDenied::class],
+    'routine privilege' => [1370, '42000', QueryPermissionDenied::class],
     'syntax' => [1064, '42000', QueryFailed::class],
 ]);
 

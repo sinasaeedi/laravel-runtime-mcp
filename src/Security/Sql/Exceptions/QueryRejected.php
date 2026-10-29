@@ -12,7 +12,8 @@ use Throwable;
  * final subclasses, with the PDO exception as previous; 01-20 turns each one into an envelope result.
  *
  * The message is the database's own message (PDO errorInfo[2]), never QueryException::getMessage():
- * that one also holds the agent SQL and the connection name.
+ * that one also holds the agent SQL and the connection name. On PostgreSQL an error with a position
+ * (42601, 42703) still quotes the agent SQL on its "LINE 1:" line; the first line does not.
  */
 abstract class QueryRejected extends RuntimeException
 {

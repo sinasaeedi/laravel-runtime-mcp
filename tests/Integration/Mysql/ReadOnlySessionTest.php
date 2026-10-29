@@ -400,3 +400,111 @@ it('M17 MariaDB reached with the mysql driver gets the MariaDB timeout (isMaria)
         // The reset disconnected: isMaria() must reconnect before it reads the server version.
         ->and(mysqlSessionScalar('SELECT 1'))->toBe(1);
 });
+
+it('M18 a connection that cannot be opened: QueryFailed with a fixed message, also when Frames connects (mysql driver)', function (?string $driver) {
+    $role = mysqlSessionRole();
+    config()->set('database.connections.rmcp_ro_broken', [...$role->config(), 'password' => 'wrong', ...($driver === null ? [] : ['driver' => $driver])]);
+    config()->set('runtime-mcp.database.connection', 'rmcp_ro_broken');
+    $ran = false;
+    $thrown = null;
+
+    try {
+        mysqlSessionRun(function () use (&$ran): bool {
+            $ran = true;
+
+            return true;
+        });
+    } catch (QueryRejected $e) {
+        $thrown = $e;
+    }
+
+    // 1045: "Access denied for user '…'@'<client address>' (using password: YES)".
+    expect($thrown)->toBeInstanceOf(QueryFailed::class)
+        ->and($thrown?->getMessage())->toBe(ReadOnlySession::CONNECTION_FAILED)
+        ->and($thrown?->driverCode)->toBe(1045)
+        ->and($ran)->toBeFalse()
+        ->and(str_contains((string) $thrown?->getPrevious()?->getMessage(), $role->name()))->toBeTrue();
+})->with(['the configured driver' => [null], 'the mysql driver (Frames asks isMaria())' => ['mysql']]);
+
+it('M19 a persistent connection is refused before any SQL runs: a disconnect would not end its session', function (bool $caseB) {
+    mysqlSessionRole(['database.connections.'.ReadOnlyRole::CONNECTION.'.options' => [PDO::ATTR_PERSISTENT => true]]);
+    $connection = DB::connection(ReadOnlyRole::CONNECTION);
+
+    if ($caseB) {
+        $connection->statement('SET TRANSACTION READ ONLY');
+        $connection->beginTransaction();
+        app(SessionLedger::class)->markReadOnly(ReadOnlyRole::CONNECTION);
+    }
+
+    $ran = false;
+    $thrown = null;
+
+    try {
+        mysqlSessionRun(function () use (&$ran): bool {
+            $ran = true;
+
+            return true;
+        });
+    } catch (QueryRejected $e) {
+        $thrown = $e;
+    }
+
+    expect($thrown)->toBeInstanceOf(QueryFailed::class)
+        ->and($thrown?->getMessage())->toBe(ReadOnlySession::PERSISTENT)
+        ->and($ran)->toBeFalse()
+        ->and($connection->transactionLevel())->toBe($caseB ? 1 : 0);
+
+    if ($caseB) {
+        $connection->rollBack();
+    }
+})->with(['Case A' => [false], 'Case B' => [true]]);
+
+it('M20 a connection lost while the frame starts, whose new session cannot be opened: SESSION_LOST, never the connect error', function () {
+    $role = mysqlSessionRole();
+    $connection = DB::connection(ReadOnlyRole::CONNECTION);
+    $killed = false;
+    $ran = false;
+
+    // Laravel reconnects inside beginTransaction(); the wrong password makes that connect fail.
+    $connection->beforeStartingTransaction(function (Connection $starting) use (&$killed): void {
+        if (! $killed) {
+            $killed = true;
+            config()->set('database.connections.'.ReadOnlyRole::CONNECTION.'.password', 'wrong');
+            mysqlSessionKill($starting);
+        }
+    });
+
+    $thrown = null;
+
+    try {
+        mysqlSessionRun(function () use (&$ran): bool {
+            $ran = true;
+
+            return true;
+        });
+    } catch (QueryRejected $e) {
+        $thrown = $e;
+    }
+
+    expect($killed)->toBeTrue()
+        ->and($thrown)->toBeInstanceOf(QueryFailed::class)
+        ->and($thrown?->getMessage())->toBe(ReadOnlySession::SESSION_LOST)
+        ->and($ran)->toBeFalse()
+        ->and(str_contains((string) $thrown?->getPrevious()?->getMessage(), $role->name()))->toBeTrue();
+});
+
+it('M21 a function the role may not execute is a permission error (1370), as on PostgreSQL (42501)', function () {
+    mysqlSessionRole();
+    $db = DB::connection('testing_mysql');
+    $db->getPdo()->exec('DROP FUNCTION IF EXISTS rmcp_one');
+    $db->getPdo()->exec('CREATE FUNCTION rmcp_one() RETURNS INT DETERMINISTIC RETURN 1');
+
+    currentTest()->beforeApplicationDestroyed(function (): void {
+        DB::connection('testing_mysql')->getPdo()->exec('DROP FUNCTION IF EXISTS rmcp_one');
+    });
+
+    [$e] = mysqlSessionRejected('SELECT rmcp_one()');
+
+    expect($e)->toBeInstanceOf(QueryPermissionDenied::class)
+        ->and([$e->sqlState, $e->driverCode])->toBe(['42000', 1370]);
+});

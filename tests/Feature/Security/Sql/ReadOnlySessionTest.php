@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Connection;
+use SinaSaeedi\RuntimeMcp\Security\Sql\Exceptions\QueryFailed;
 use SinaSaeedi\RuntimeMcp\Security\Sql\ReadOnlySession;
 use SinaSaeedi\RuntimeMcp\Security\Sql\SessionLedger;
 use SinaSaeedi\RuntimeMcp\Security\UnsupportedDriver;
@@ -123,4 +124,59 @@ it('F7 reset() never throws: a connection it cannot reset is discarded, and the 
 
     expect($ledger->pendingResets())->toBe(['other'])
         ->and(app('db')->connection(TestCase::READ_ONLY_CONNECTION))->not->toBe($before);
+});
+
+it('F8 reset() of a name with no connection made (unknown, or purged) never throws and is no longer pending', function () {
+    currentTest()->bootWith();
+    $ledger = app(SessionLedger::class);
+    $ledger->deferReset('not_configured');
+    $ledger->deferReset('other');
+
+    $ledger->reset('not_configured');
+
+    expect($ledger->pendingResets())->toBe(['other'])
+        ->and(app('db')->getConnections())->not->toHaveKey('not_configured');
+});
+
+it('F9 reset() finds a connection by getName(), the name Case B defers, also when a config name key differs from its key', function () {
+    currentTest()->bootWith();
+    config()->set('database.connections.rmcp_key', ['driver' => 'sqlite', 'database' => ':memory:', 'name' => 'rmcp_renamed']);
+    $connection = app('db')->connection('rmcp_key');
+    $connection->getPdo();
+    $ledger = app(SessionLedger::class);
+    $ledger->deferReset((string) $connection->getName());
+
+    // SQLite has no frame (UnsupportedDriver inside the reset), so the connection is discarded.
+    $ledger->reset('rmcp_renamed');
+
+    expect($connection->getName())->toBe('rmcp_renamed')
+        ->and($ledger->pendingResets())->toBe([])
+        ->and($connection->getRawPdo())->toBeNull();
+});
+
+it('F10 refuses the default connection in a strict environment, also when no plugin requires the read-only connection', function (mixed $configured) {
+    currentTest()->bootWith([
+        'runtime-mcp.plugins.database' => false,
+        'runtime-mcp.plugins.models' => false,
+        'runtime-mcp.database.connection' => $configured,
+        'database.connections.session_default' => ['driver' => 'sqlsrv', 'host' => 'db.invalid', 'database' => 'app'],
+        'database.default' => 'session_default',
+    ], 'production');
+
+    [$thrown, $ran] = sessionAttempt();
+
+    // Not UnsupportedDriver: the frame refused before it looked at the default connection.
+    expect($thrown)->toBeInstanceOf(QueryFailed::class)
+        ->and($thrown?->getMessage())->toBe(ReadOnlySession::NO_READ_ONLY_CONNECTION)
+        ->and($ran)->toBeFalse();
+})->with(['null' => [null], 'empty' => [''], 'blank' => ['  '], 'the default connection' => ['session_default']]);
+
+it('F11 uses a separate read-only connection in a strict environment', function () {
+    currentTest()->bootWith(['runtime-mcp.plugins.database' => false, 'runtime-mcp.plugins.models' => false], 'production');
+
+    [$thrown, $ran] = sessionAttempt();
+
+    // testing_readonly is SQLite: the frame got past the strict check to the driver check.
+    expect($thrown)->toBeInstanceOf(UnsupportedDriver::class)
+        ->and($ran)->toBeFalse();
 });

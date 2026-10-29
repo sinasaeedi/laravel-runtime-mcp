@@ -10,6 +10,7 @@ use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
 use PDO;
 use PDOException;
+use SinaSaeedi\RuntimeMcp\Security\Environment;
 use SinaSaeedi\RuntimeMcp\Security\Sql\Drivers\Frames;
 use SinaSaeedi\RuntimeMcp\Security\Sql\Drivers\SessionFrame;
 use SinaSaeedi\RuntimeMcp\Security\Sql\Exceptions\NotInReadOnlyTransaction;
@@ -31,12 +32,19 @@ final class ReadOnlySession
 {
     public const SESSION_LOST = 'The connection was lost while the read-only session was set up. The query was not run.';
 
+    public const CONNECTION_FAILED = 'The read-only connection could not be opened. The query was not run.';
+
+    public const PERSISTENT = 'The read-only connection is persistent (PDO::ATTR_PERSISTENT), and a disconnect does not end a persistent session. The query was not run.';
+
+    public const NO_READ_ONLY_CONNECTION = 'RUNTIME_MCP_DB_CONNECTION is not set or names the default connection, and a strict environment runs no package query on the default connection. The query was not run.';
+
     public function __construct(
         private readonly DatabaseManager $db,
         private readonly Repository $config,
         private readonly SessionLedger $ledger,
         private readonly Frames $frames,
         private readonly TimeoutSetting $timeout,
+        private readonly Environment $environment,
     ) {}
 
     /**
@@ -55,7 +63,7 @@ final class ReadOnlySession
     public function run(Closure $work): mixed
     {
         $connection = $this->connection();
-        $frame = $this->frames->for($connection);
+        $frame = $this->frame($connection);
         $timeoutMs = $this->timeout->milliseconds();
 
         try {
@@ -78,9 +86,9 @@ final class ReadOnlySession
      */
     private function runInOwnTransaction(Connection $connection, SessionFrame $frame, int $timeoutMs, Closure $work): mixed
     {
-        // The last call's disconnect() left the PDO null, and getPdo() does not reconnect.
-        $connection->reconnectIfMissingConnection();
+        // frame() connected: the last call's disconnect() left the PDO null, and getPdo() does not reconnect.
         $pdo = $connection->getPdo();
+        $this->refusePersistent($pdo);
         $emulated = $pdo->getAttribute(PDO::ATTR_EMULATE_PREPARES);
         $lost = false;
 
@@ -100,6 +108,16 @@ final class ReadOnlySession
             $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
 
             return $work($connection);
+        } catch (PDOException $e) {
+            // The same retry, when the new session cannot be opened: Laravel left a new (lazy) PDO, and
+            // the connect error names the host, the port and the user (spec 4.3).
+            if ($connection->getRawPdo() !== $pdo) {
+                $lost = true;
+
+                throw new QueryFailed('HY000', null, self::SESSION_LOST, $e);
+            }
+
+            throw $e;
         } finally {
             $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, $emulated);
 
@@ -129,6 +147,7 @@ final class ReadOnlySession
         }
 
         $pdo = $connection->getPdo();
+        $this->refusePersistent($pdo);
         $emulated = $pdo->getAttribute(PDO::ATTR_EMULATE_PREPARES);
         $level = $connection->transactionLevel();
         $connection->beginTransaction(); // a SAVEPOINT
@@ -151,11 +170,55 @@ final class ReadOnlySession
         }
     }
 
+    /**
+     * Picks the frame and, in Case A, opens the connection. A connect error names the host, the port and
+     * the user, so the agent gets CONNECTION_FAILED (spec 4.3); the error itself stays the previous one.
+     */
+    private function frame(Connection $connection): SessionFrame
+    {
+        try {
+            // Frames::for() connects to a mysql-driver server to ask whether it is MariaDB.
+            $frame = $this->frames->for($connection);
+
+            // Not in Case B: disconnect() keeps the transaction level, so a reconnect there would run the
+            // savepoint on a new session outside any transaction.
+            if ($connection->transactionLevel() === 0) {
+                $connection->reconnectIfMissingConnection();
+                $connection->getPdo(); // Opens Laravel's lazy connection.
+            }
+        } catch (PDOException $e) {
+            $error = DatabaseError::of($e);
+
+            // PostgreSQL's errorInfo[1] is always 7 (PostgresFrame::translate()).
+            $driverCode = $connection->getDriverName() === 'pgsql' ? null : $error->driverCode;
+
+            throw new QueryFailed($error->sqlState, $driverCode, self::CONNECTION_FAILED, $e);
+        }
+
+        return $frame;
+    }
+
+    /**
+     * A disconnect() does not end a persistent session: MySQL and MariaDB reset by it, and a discard()
+     * after a failed reset relies on it on every driver. Its locks and variables would reach the next call.
+     */
+    private function refusePersistent(PDO $pdo): void
+    {
+        if ($pdo->getAttribute(PDO::ATTR_PERSISTENT) === true) {
+            throw new QueryFailed('HY000', null, self::PERSISTENT);
+        }
+    }
+
     private function connection(): Connection
     {
         $name = $this->config->get('runtime-mcp.database.connection');
 
-        // Unset is possible only in a relaxed environment: 01-10's boot rule forbids it in a strict one.
+        // 01-10's boot rule forbids this in a strict environment, but only while a plugin that requires the
+        // read-only connection is active. The frame does not depend on its caller's plugin (principle 1.4.3).
+        if ($this->environment->isStrict() && (! is_string($name) || trim($name) === '' || $name === $this->config->get('database.default'))) {
+            throw new QueryFailed('HY000', null, self::NO_READ_ONLY_CONNECTION);
+        }
+
         // null and '' both give the default connection (DatabaseManager::connection() uses ?:).
         return $this->db->connection(is_string($name) ? $name : null);
     }

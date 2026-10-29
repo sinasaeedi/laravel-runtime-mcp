@@ -64,7 +64,18 @@ final class SessionLedger
     /** The per-driver reset of Part A, for a connection by name. Never throws. */
     public function reset(string $connection): void
     {
-        $this->resetConnection($this->db->connection($connection));
+        // By getName(), the name Case B deferred: a config `name` key differs from the config key, and
+        // DatabaseManager::connection() would throw for it. A new connection would also run app listeners.
+        foreach ($this->db->getConnections() as $made) {
+            if ($made->getName() === $connection) {
+                $this->resetConnection($made);
+
+                return;
+            }
+        }
+
+        // Not made, or purged (discard()): no session is left to reset.
+        $this->pending = array_values(array_diff($this->pending, [$connection]));
     }
 
     /**
