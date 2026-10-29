@@ -271,11 +271,7 @@ it('checks a role that the user was granted, set as default or not', function (b
         ->and($masked->fix)->toBe("REVOKE {$written} FROM {$user};".MYSQL_PRIVILEGES_AGAIN);
 })->with(['the default role' => [true], 'a role that is not active' => [false]]);
 
-it('on MariaDB, checks a role nested in a granted role', function () {
-    if (! mysqlPrivilegesIsMaria()) {
-        Assert::markTestSkipped('MySQL: a role in a role is covered by USING; this case is the MariaDB SET ROLE path.');
-    }
-
+it('checks a role nested in a granted role (MySQL: USING, MariaDB: SET ROLE)', function () {
     $role = mysqlPrivilegesRole();
     $outer = mysqlPrivilegesNewRole('rmcp_outer_');
     $inner = mysqlPrivilegesNewRole('rmcp_inner_');
@@ -284,9 +280,10 @@ it('on MariaDB, checks a role nested in a granted role', function () {
     mysqlPrivilegesGrant("GRANT `{$outer}` TO '{$role->name()}'@'%'");
 
     $write = mysqlPrivilegeResults()[0];
+    $written = mysqlPrivilegesIsMaria() ? "`{$outer}`" : "`{$outer}`@`%`";
 
-    expect($write->message)->toBe('The read-only role can write or change the schema: INSERT on '.mysqlPrivilegesTable('orders')." (through `{$outer}`).")
-        ->and($write->fix)->toStartWith("REVOKE `{$outer}` FROM ".mysqlPrivilegesUser($role).';');
+    expect($write->message)->toBe('The read-only role can write or change the schema: INSERT on '.mysqlPrivilegesTable('orders')." (through {$written}).")
+        ->and($write->fix)->toStartWith("REVOKE {$written} FROM ".mysqlPrivilegesUser($role).';');
 });
 
 it('on MariaDB, names a privilege that PUBLIC holds, with a REVOKE … FROM PUBLIC', function () {
@@ -401,4 +398,67 @@ it('changes no grant and no default role: a new login has both after doctor ran'
 
     expect($current === false ? null : $current->fetchColumn())->toContain($extra)
         ->and($grants === false ? '' : json_encode($grants->fetchAll(PDO::FETCH_COLUMN), JSON_THROW_ON_ERROR))->toContain('INSERT');
+});
+
+it('check 3: fails for a SELECT that reaches another database of the server (2026-10-29 triage)', function (string $grant) {
+    $role = mysqlPrivilegesRole();
+    $other = 'rmcp_other_'.bin2hex(random_bytes(4));
+    currentTest()->beforeApplicationDestroyed(fn () => mysqlPrivilegesGrant("DROP DATABASE IF EXISTS `{$other}`"));
+    mysqlPrivilegesGrant("CREATE DATABASE `{$other}`");
+    mysqlPrivilegesGrant("CREATE TABLE `{$other}`.`users` (`id` int, `password` varchar(64))");
+    mysqlPrivilegesGrant("INSERT INTO `{$other}`.`users` VALUES (1, 'hunter2')");
+    [$on, $item, $revoke] = match ($grant) {
+        'database' => ["SELECT ON `{$other}`.*", "`{$other}`.*", "SELECT ON `{$other}`.*"],
+        'table' => ["SELECT ON `{$other}`.`users`", "`{$other}`.`users`", "SELECT ON `{$other}`.`users`"],
+        default => ["SELECT (`password`) ON `{$other}`.`users`", "`{$other}`.`users`.`password`", "SELECT (`password`) ON `{$other}`.`users`"],
+    };
+    mysqlPrivilegesGrant("GRANT {$on} TO '{$role->name()}'@'%'");
+
+    // The premise: a qualified name reads the other database through the read-only connection.
+    $read = DB::connection(ReadOnlyRole::CONNECTION)->selectOne("select `password` from `{$other}`.`users`");
+    $masked = mysqlPrivilegeResults()[2];
+
+    expect(is_object($read) ? ((array) $read)['password'] : null)->toBe('hunter2')
+        ->and($masked->status->value)->toBe('fail')
+        ->and($masked->privilege)->toBeTrue()
+        ->and($masked->message)->toBe("The read-only role can read masked columns or denied tables: {$item} (another database).")
+        ->and($masked->fix)->toBe("REVOKE {$revoke} FROM ".mysqlPrivilegesUser($role).';'.MYSQL_PRIVILEGES_AGAIN);
+})->with([
+    'a database grant' => ['database'],
+    'a table grant' => ['table'],
+    'a column grant on a masked column' => ['column'],
+]);
+
+it('check 3: passes a column grant in another database when the column is not masked', function () {
+    $role = mysqlPrivilegesRole();
+    $other = 'rmcp_other_'.bin2hex(random_bytes(4));
+    currentTest()->beforeApplicationDestroyed(fn () => mysqlPrivilegesGrant("DROP DATABASE IF EXISTS `{$other}`"));
+    mysqlPrivilegesGrant("CREATE DATABASE `{$other}`");
+    mysqlPrivilegesGrant("CREATE TABLE `{$other}`.`users` (`id` int, `password` varchar(64))");
+    mysqlPrivilegesGrant("GRANT SELECT (`id`) ON `{$other}`.`users` TO '{$role->name()}'@'%'");
+
+    expect(mysqlPrivilegeResults()[2]->status->value)->toBe('pass');
+});
+
+it('check 3: a database pattern that can match another database fails as another database too', function () {
+    $role = mysqlPrivilegesRole();
+    $name = substr(DB::connection('testing_mysql')->getDatabaseName(), 0, 3).'%';
+    mysqlPrivilegesGrant("GRANT SELECT ON `{$name}`.* TO '{$role->name()}'@'%'");
+
+    $masked = mysqlPrivilegeResults()[2];
+
+    expect($masked->message)->toContain('users.password')
+        ->and($masked->message)->toContain("`{$name}`.* (another database)")
+        ->and(substr_count($masked->fix ?? '', "REVOKE SELECT ON `{$name}`.*"))->toBe(1);
+});
+
+it('turns a default connection that is not configured into a check 3 Fail, and runs checks 1 and 2 (2026-10-29 triage)', function () {
+    mysqlPrivilegesRole('local');
+    config()->set('database.default', 'not_configured');
+
+    $results = mysqlPrivilegeResults();
+
+    expect(array_map(fn (CheckResult $result): string => $result->status->value, $results))->toBe(['pass', 'pass', 'fail'])
+        ->and($results[2]->message)->toBe('Masked columns could not be checked: InvalidArgumentException.')
+        ->and($results[2]->privilege)->toBeTrue();
 });
