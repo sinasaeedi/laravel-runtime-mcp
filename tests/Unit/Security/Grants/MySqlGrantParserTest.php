@@ -152,3 +152,13 @@ it('unquotes backticks, single and double quotes, and leaves a bare word', funct
     'double quotes' => ['"x""y"', 'x"y'],
     'bare' => ['bare', 'bare'],
 ]);
+
+it('keeps a privilege item it cannot read, as written, so that check 1 names it (2026-10-29 re-review)', function () {
+    $grant = parsedGrant('GRANT SELECT, FUTURE-PRIV  X, INSERT ON `app`.`orders` TO `u`@`%`');
+
+    expect($grant->privileges)->toBe([
+        ['name' => 'SELECT', 'columns' => null],
+        ['name' => 'FUTURE-PRIV X', 'columns' => null],
+        ['name' => 'INSERT', 'columns' => null],
+    ]);
+});

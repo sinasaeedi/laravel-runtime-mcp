@@ -22,7 +22,8 @@ final readonly class MySqlGrant
     public const PROXY = 'proxy';       // ON ''@''
 
     /**
-     * @param  list<array{name: string, columns: list<string>|null}>  $privileges  upper case, one space between words, ALL as ALL PRIVILEGES; empty for a role grant
+     * @param  list<array{name: string, columns: list<string>|null}>  $privileges  upper case, one space between words, ALL as ALL PRIVILEGES; empty for a role grant.
+     *                                                                             An item the parser cannot read is kept as written (one space between words)
      * @param  string  $target  the ON part as SHOW GRANTS wrote it ('' for a role grant), reused in fix lines
      * @param  list<string>  $roles  a role grant: each role as SHOW GRANTS wrote it ("`r`@`%`", "`r`"), reused in SQL
      * @param  string  $granteeName  unquoted; 'PUBLIC' for MariaDB's PUBLIC
