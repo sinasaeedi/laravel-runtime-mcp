@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SinaSaeedi\RuntimeMcp\Doctor\Checks;
 
 use Illuminate\Contracts\Config\Repository;
+use Monolog\Handler\RotatingFileHandler;
 use SinaSaeedi\RuntimeMcp\Audit\AuditChannel;
 use SinaSaeedi\RuntimeMcp\Doctor\Check;
 use SinaSaeedi\RuntimeMcp\Doctor\CheckResult;
@@ -12,7 +13,8 @@ use SinaSaeedi\RuntimeMcp\Doctor\CheckResult;
 /**
  * Spec 5.7, 01-05: the audit channel can be written, or every tool result is withheld (fail closed).
  * A channel with a path (the package's daily channel, or an app single/daily channel) needs a
- * writable directory; a channel without one (database, stack, custom) is the app's to check. A
+ * writable directory, and a writable file when today's file exists; a channel without one
+ * (database, stack, custom) is the app's to check. A
  * NullHandler channel fails and a level above info warns: both drop entries with no error.
  *
  * is_writable() checks the user that runs doctor, which can differ from the PHP-FPM user (docs).
@@ -81,6 +83,17 @@ final class AuditLog implements Check
             return $results;
         }
 
+        $file = self::currentFile($channel['driver'] ?? null, $path);
+
+        if ($file !== null && is_file($file) && ! is_writable($file)) {
+            $results[] = CheckResult::fail(
+                "The audit cannot be written to {$file}, so tool results are withheld.",
+                'Make the file writable for the user that runs PHP.',
+            );
+
+            return $results;
+        }
+
         $results[] = CheckResult::pass("Channel `{$name}` writes to {$directory}.");
 
         return $results;
@@ -125,5 +138,19 @@ final class AuditLog implements Check
         }
 
         return $directory;
+    }
+
+    /**
+     * The file a single or daily channel appends to today (daily: Monolog's dated name), or null for
+     * another driver. A file that exists but cannot be appended to fails every write, even in a
+     * writable directory (01-12 re-review).
+     */
+    private static function currentFile(mixed $driver, string $path): ?string
+    {
+        return match ($driver) {
+            'single' => $path,
+            'daily' => (new RotatingFileHandler($path))->getUrl(),
+            default => null,
+        };
     }
 }
