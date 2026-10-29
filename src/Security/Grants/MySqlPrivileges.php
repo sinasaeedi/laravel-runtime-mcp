@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SinaSaeedi\RuntimeMcp\Security\Grants;
 
+use Closure;
 use Illuminate\Database\Connection;
 use Illuminate\Database\MySqlConnection;
 use PDO;
@@ -19,7 +20,9 @@ use PDO;
  *
  * A column is readable when a SELECT (or ALL PRIVILEGES) covers it: on *.*, on its database (a LIKE
  * pattern), on its table or on the column. information_schema is not used for this: it shows a column
- * for any privilege on it, also INSERT, and only for the active roles.
+ * for any privilege on it, also INSERT, and only for the active roles. A qualified name reaches every
+ * database of the server, so a SELECT that reaches another database fails too: its columns cannot be
+ * listed from here.
  *
  * Not read: MySQL's mandatory_roles server setting (a role every user gets without a GRANT line).
  * Keep it empty on a server with a read-only user; the docs say so.
@@ -42,11 +45,12 @@ final class MySqlPrivileges implements RolePrivileges
 
     /**
      * @param  Connection  $connection  the read-only connection
-     * @param  Connection  $app  the default connection: the read-only user cannot list a column it has no privilege on
+     * @param  Closure(): Connection  $app  the default connection: the read-only user cannot list a column it has no privilege on.
+     *                                      Resolved inside check 3, so a default connection that is not configured fails only check 3.
      */
     public function __construct(
         private readonly Connection $connection,
-        private readonly Connection $app,
+        private readonly Closure $app,
     ) {}
 
     public function writes(): array
@@ -67,7 +71,7 @@ final class MySqlPrivileges implements RolePrivileges
         $tables = [];
         $views = [];
 
-        foreach ($this->app->select(
+        foreach (($this->app)()->select(
             'select c.table_name as name, c.column_name as col, t.table_type as type from information_schema.columns c '
             .'join information_schema.tables t on t.table_schema = c.table_schema and t.table_name = c.table_name '
             .'where c.table_schema = ? order by c.table_name, c.ordinal_position',
@@ -119,7 +123,55 @@ final class MySqlPrivileges implements RolePrivileges
             }
         }
 
+        foreach ($select as $atom) {
+            $finding = $this->elsewhere($atom, $database, $mask, $denied, $prefix);
+
+            if ($finding !== null) {
+                $findings[] = $finding;
+            }
+        }
+
         return $findings;
+    }
+
+    /**
+     * A SELECT that reaches another database than the read-only connection's: `SELECT password FROM
+     * billing.users` reads it, as a schema-qualified name does on PostgreSQL. A column grant there
+     * counts when the column is masked or the table denied; a table, database or global grant always
+     * counts, because the columns of another database cannot be listed from here.
+     *
+     * @param  array{privilege: string, column: string|null, grant: MySqlGrant, via: string|null}  $atom
+     */
+    private function elsewhere(array $atom, string $database, ColumnMask $mask, DeniedTables $denied, string $prefix): ?PrivilegeFinding
+    {
+        $grant = $atom['grant'];
+
+        $reaches = match ($grant->targetKind) {
+            MySqlGrant::GLOBAL => true,
+            MySqlGrant::DATABASE => self::literal((string) $grant->database) !== $database,
+            MySqlGrant::TABLE => (string) $grant->database !== $database
+                && ($atom['column'] === null || $mask->matches($atom['column']) || $denied->contains((string) $grant->database, (string) $grant->table, $prefix)),
+            default => false,
+        };
+
+        if (! $reaches) {
+            return null;
+        }
+
+        $what = $grant->targetKind === MySqlGrant::GLOBAL ? 'every database' : 'another database';
+        $item = $atom['column'] === null ? $grant->target : $grant->target.'.'.RoleSqlGenerator::quoteMySql($atom['column']);
+        $from = $atom['via'] === 'PUBLIC' ? 'PUBLIC' : $this->grantee();
+
+        $fix = match (true) {
+            $atom['via'] !== null && $atom['via'] !== 'PUBLIC' => "REVOKE {$atom['via']} FROM {$this->grantee()};",
+            $atom['column'] !== null => 'REVOKE SELECT ('.RoleSqlGenerator::quoteMySql($atom['column']).") ON {$grant->target} FROM {$from};",
+            $grant->targetKind === MySqlGrant::TABLE => "REVOKE SELECT ON {$grant->target} FROM {$from};",
+            // It also reaches the app's database: the tables there need their grants back.
+            $grant->targetKind === MySqlGrant::GLOBAL || self::databaseMatches((string) $grant->database, $database) => "REVOKE SELECT ON {$grant->target} FROM {$from}; Then grant SELECT per table, as the role SQL of `runtime-mcp:install` does.",
+            default => "REVOKE SELECT ON {$grant->target} FROM {$from};",
+        };
+
+        return new PrivilegeFinding("{$item} ({$what})".self::through((string) $atom['via']), $fix);
     }
 
     /**
@@ -238,6 +290,27 @@ final class MySqlPrivileges implements RolePrivileges
         }
 
         return preg_match('/^'.$regex.'$/iDs', $database) === 1;
+    }
+
+    /** The database a LIKE pattern names when it has no wildcard (the \ escapes removed), or null: a wildcard can reach another database. */
+    private static function literal(string $pattern): ?string
+    {
+        $name = '';
+        $length = strlen($pattern);
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $pattern[$i];
+
+            if ($char === '\\' && $i + 1 < $length) {
+                $name .= $pattern[++$i];
+            } elseif ($char === '%' || $char === '_') {
+                return null;
+            } else {
+                $name .= $char;
+            }
+        }
+
+        return $name;
     }
 
     private static function through(string $via): string
