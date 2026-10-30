@@ -89,9 +89,7 @@ final class AuthenticateSanctumToken
             return $this->reject($request, Reason::TokenExpired, $details);
         }
 
-        $abilities = $row->getAttribute('abilities');
-
-        if (! is_array($abilities) || ! in_array(self::ABILITY, $abilities, true)) {
+        if (! self::hasAbility($row)) {
             return $this->reject($request, Reason::TokenMissingAbility, $details);
         }
 
@@ -173,7 +171,27 @@ final class AuthenticateSanctumToken
             && $createdAt > Carbon::now()->subMinutes((int) $minutes);
     }
 
-    /** The token's owner, only when it is an instance of the app's user model (Sina, 2026-10-20). */
+    /**
+     * Rule 21: the abilities list holds the exact ability. A stored value that the model's cast cannot
+     * read (it throws, as an `encrypted:array` cast after a key change) has none.
+     */
+    private static function hasAbility(PersonalAccessToken $row): bool
+    {
+        try {
+            $abilities = $row->getAttribute('abilities');
+        } catch (Throwable) {
+            return false;
+        }
+
+        return is_array($abilities) && in_array(self::ABILITY, $abilities, true);
+    }
+
+    /**
+     * The token's owner, only when it is an instance of the app's user model (Sina, 2026-10-20) and
+     * lives in the user model's table on its connection (Sina, 2026-10-30): "user-<id>" is then unique.
+     * A subclass on the same table (single-table inheritance) is the same user; one on its own table
+     * would share the ids of the users.
+     */
     private function owner(PersonalAccessToken $row): ?Authenticatable
     {
         $userModel = UserModel::fromConfig($this->config);
@@ -184,14 +202,27 @@ final class AuthenticateSanctumToken
 
         try {
             $owner = $row->getRelationValue('tokenable');
+
+            if (! $owner instanceof Model || ! $owner instanceof Authenticatable || ! $owner instanceof $userModel) {
+                return null;
+            }
+
+            $users = new $userModel;
+
+            if (! $users instanceof Model) {
+                return null;
+            }
+
+            // getConnection(), not getConnectionName(): morphTo gives the owner the token's connection
+            // name when the model names none, and the user model then has null.
+            return $owner->getTable() === $users->getTable()
+                && $owner->getConnection()->getName() === $users->getConnection()->getName()
+                ? $owner
+                : null;
         } catch (Throwable) {
-            // A morph class that no longer exists, for example.
+            // A morph class that no longer exists, or a user model that cannot be built, for example.
             return null;
         }
-
-        return $owner instanceof Model && $owner instanceof Authenticatable && $owner instanceof $userModel
-            ? $owner
-            : null;
     }
 
     /**
