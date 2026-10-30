@@ -15,6 +15,7 @@ use SinaSaeedi\RuntimeMcp\Security\Auth\UserModel;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\SanctumInstalled;
 use SinaSaeedi\RuntimeMcp\Security\Grants\DeniedTables;
 use SinaSaeedi\RuntimeMcp\Security\Grants\InvalidGrantConfig;
+use Throwable;
 
 /**
  * Spec 5.3, 7.3 (01-35): the sanctum driver. Only for that driver: the app's user model can own tokens,
@@ -94,7 +95,9 @@ final class Sanctum implements Check
         $shown = $named ? "`{$table}`" : 'The token table';
 
         try {
-            $denied = DeniedTables::fromConfig($this->config)->contains('', $table);
+            $denied = DeniedTables::fromConfig($this->config)->contains(
+                ...self::schemaAndTable($instance instanceof Model ? $instance : null, $table),
+            );
         } catch (InvalidGrantConfig) {
             return CheckResult::warn(
                 'Not checked: database.denied_tables is not an array (see Mask lists).',
@@ -110,5 +113,28 @@ final class Sanctum implements Check
             "{$shown} is not in denied_tables, so the read-only role may read token rows.",
             'Put '.($named ? $table : 'the token table').' back in runtime-mcp.database.denied_tables.',
         );
+    }
+
+    /**
+     * The token table as denied_tables matches it: "schema.table" splits, and a plain name gets the
+     * default schema of the model's connection (Laravel's own rule, read from the config, no query), so
+     * a "public.personal_access_tokens" entry matches on PostgreSQL. Without a model: no schema.
+     *
+     * @return array{string, string}
+     */
+    private static function schemaAndTable(?Model $instance, string $table): array
+    {
+        if ($instance === null) {
+            return ['', $table];
+        }
+
+        try {
+            [$schema, $name] = $instance->getConnection()->getSchemaBuilder()->parseSchemaAndTable($table, true);
+        } catch (Throwable) {
+            // An unknown connection, or a three-part name: match it as it is.
+            return ['', $table];
+        }
+
+        return [$schema ?? '', $name];
     }
 }
