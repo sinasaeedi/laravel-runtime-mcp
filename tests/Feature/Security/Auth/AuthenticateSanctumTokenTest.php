@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -25,7 +26,12 @@ use SinaSaeedi\RuntimeMcp\Security\Auth\AuthMethod;
 use SinaSaeedi\RuntimeMcp\Security\Auth\CurrentPrincipal;
 use SinaSaeedi\RuntimeMcp\Security\Auth\Unauthenticated;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Answer401;
+use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Auth\BaseTokenUser;
+use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Auth\EncryptedAbilitiesToken;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Auth\LookalikeToken;
+use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Auth\OtherConnectionTokenUser;
+use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Auth\OtherTableTokenUser;
+use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Auth\SameTableTokenUser;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Auth\StringKeyToken;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Auth\TokenUser;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Auth\UncastToken;
@@ -103,6 +109,7 @@ function sanctumTokenHeader(string $case): ?string
         'another case of the ability' => 'Bearer '.Tokens::issue($user, ['Runtime-MCP']),
         'no abilities' => sanctumTokenWithRawAbilities($user, null),
         'abilities that are not a list' => sanctumTokenWithRawAbilities($user, '"runtime-mcp"'),
+        'abilities that the cast cannot read' => sanctumTokenWithUnreadableAbilities($user),
         'expires_at in the past' => 'Bearer '.Tokens::issue($user, expiresAt: Carbon::now()->subMinute()),
         'expires_at that the cast cannot read' => sanctumTokenWithRawColumn($user, 'expires_at', 'soon'),
         'expires_at without a date cast' => sanctumTokenWithoutDateCast($user),
@@ -123,6 +130,15 @@ function sanctumTokenWithRawAbilities(TokenUser $user, ?string $json): string
 {
     $token = Tokens::issue($user);
     DB::table('personal_access_tokens')->where('id', Tokens::id($token))->update(['abilities' => $json]);
+
+    return 'Bearer '.$token;
+}
+
+/** A plain JSON abilities column, read by a token model that decrypts it: the cast throws. */
+function sanctumTokenWithUnreadableAbilities(TokenUser $user): string
+{
+    $token = Tokens::issue($user);
+    Sanctum::usePersonalAccessTokenModel(EncryptedAbilitiesToken::class);
 
     return 'Bearer '.$token;
 }
@@ -240,6 +256,7 @@ it('rejects with the reason in the audit only', function (string $case, Reason $
     'another case of the ability' => ['another case of the ability', Reason::TokenMissingAbility, ['scheme' => 'Bearer']],
     'no abilities' => ['no abilities', Reason::TokenMissingAbility, ['scheme' => 'Bearer']],
     'abilities that are not a list' => ['abilities that are not a list', Reason::TokenMissingAbility, ['scheme' => 'Bearer']],
+    'abilities that the cast cannot read (never a 500)' => ['abilities that the cast cannot read', Reason::TokenMissingAbility, ['scheme' => 'Bearer']],
     'expires_at in the past' => ['expires_at in the past', Reason::TokenExpired, ['scheme' => 'Bearer']],
     'expires_at that the cast cannot read' => ['expires_at that the cast cannot read', Reason::TokenExpired, ['scheme' => 'Bearer']],
     'expires_at without a date cast' => ['expires_at without a date cast', Reason::TokenExpired, ['scheme' => 'Bearer']],
@@ -472,3 +489,58 @@ it('sends our header, not the laravel/mcp one, also when the app uses Mcp::oauth
 it('uses the exact ability constant runtime-mcp', function () {
     expect(AuthenticateSanctumToken::ABILITY)->toBe('runtime-mcp');
 });
+
+// 01-35 re-review (Sina, 2026-10-30): "user-<id>" must name one user, so the owner must also live in the
+// user model's table on its connection. Each owner below is the first row of its table: id 1, the id
+// that a user of the users table would also have.
+it('accepts a subclass of the user model on its table, and rejects one on another table or connection', function (string $class, ?Reason $reason) {
+    sanctumTokenBoot([
+        'auth.providers.users.model' => BaseTokenUser::class,
+        'database.connections.'.OtherConnectionTokenUser::CONNECTION => ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => ''],
+    ]);
+
+    foreach ([[null, 'token_admins'], [OtherConnectionTokenUser::CONNECTION, 'users']] as [$connection, $table]) {
+        Schema::connection($connection)->create($table, function (Blueprint $table): void {
+            $table->id();
+            $table->string('email')->unique();
+            $table->string('password')->default('');
+            $table->timestamps();
+        });
+    }
+
+    $owner = new $class;
+    assert($owner instanceof BaseTokenUser);
+    $owner->forceFill(['email' => Tokens::EMAIL])->save();
+
+    // The token table is on the default connection; createToken() would write on the owner's.
+    $secret = str_repeat('s', 40);
+    $row = new PersonalAccessToken;
+    $row->forceFill([
+        'tokenable_type' => $owner->getMorphClass(),
+        'tokenable_id' => $owner->getKey(),
+        'name' => 'runtime-mcp',
+        'token' => hash('sha256', $secret),
+        'abilities' => [AuthenticateSanctumToken::ABILITY],
+    ])->save();
+    $id = $row->getKey();
+    assert(is_int($id));
+    $token = $id.'|'.$secret;
+
+    $response = sanctumTokenPost('Bearer '.$token);
+
+    if ($reason === null) {
+        $response->assertOk();
+        $user = app(CurrentPrincipal::class)->get()?->user;
+        expect($user === null ? null : $user::class)->toBe($class);
+
+        return;
+    }
+
+    sanctumTokenAssertRejected($response);
+    expect(AuditLog::entries()[0]['reason'] ?? null)->toBe($reason->value);
+})->with([
+    'the user model itself' => [BaseTokenUser::class, null],
+    'a subclass on the same table' => [SameTableTokenUser::class, null],
+    'a subclass on another table' => [OtherTableTokenUser::class, Reason::TokenOwnerInvalid],
+    'a subclass on another connection' => [OtherConnectionTokenUser::class, Reason::TokenOwnerInvalid],
+]);

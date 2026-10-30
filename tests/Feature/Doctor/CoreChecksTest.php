@@ -606,3 +606,66 @@ it('Allowed hosts: names each bad entry by its position, never its value (01-12 
     'a port out of range and a non-string' => [['a.test:99999', 'b.test', 42], [1, 3]],
     'only bad entries' => [['bad host!', 'a.test:99999'], [1, 2, 'empty']],
 ]);
+
+// 01-35 re-review: the STDIO server applies the link of auth.stdio_principal under every driver
+// (McpServer, 01-06), so with another driver that one link is still resolved.
+it('Linked users: still checks the link of the STDIO principal with another driver', function () {
+    currentTest()->bootWith([
+        'runtime-mcp.auth.driver' => 'sanctum',
+        'runtime-mcp.auth.stdio_principal' => 'local-dev',
+        'runtime-mcp.auth.link_users' => ['local-dev' => 'nobody@example.com'],
+    ]);
+    Users::create('sina@example.com');
+
+    expect(runCoreCheck(LinkedUsers::class))->toBe([[
+        'fail',
+        'Key `local-dev` is linked to a user that does not exist, so calls with this key are rejected.',
+        'Create the user, or fix the email in auth.link_users.',
+    ]]);
+});
+
+it('Linked users: passes the STDIO link with another driver, and warns for the other links', function () {
+    currentTest()->bootWith([
+        'runtime-mcp.auth.driver' => 'sanctum',
+        'runtime-mcp.auth.stdio_principal' => 'local-dev',
+        'runtime-mcp.auth.link_users' => ['kate' => 'nobody@example.com', 'local-dev' => 'dev@example.com'],
+    ]);
+    Users::create('dev@example.com');
+
+    expect(runCoreCheck(LinkedUsers::class))->toBe([
+        ['pass', '1 linked key finds its user.', null],
+        [
+            'warn',
+            'Only the link of auth.stdio_principal has an effect: only the api_key driver links keys to users.',
+            'Keep only the auth.stdio_principal link in auth.link_users.',
+        ],
+    ]);
+});
+
+it('Linked users: fails a link_users that is not an array when the STDIO server runs with another driver', function () {
+    currentTest()->bootWith([
+        'runtime-mcp.auth.driver' => 'sanctum',
+        'runtime-mcp.auth.stdio_principal' => 'local-dev',
+        'runtime-mcp.auth.link_users' => 'x',
+    ]);
+
+    expect(runCoreCheck(LinkedUsers::class))->toBe([[
+        'fail',
+        'auth.link_users is not an array, so every key is rejected.',
+        'Set auth.link_users to an array of key name => user email, or to [].',
+    ]]);
+});
+
+it('Linked users: only warns with another driver when the STDIO principal has no link', function () {
+    currentTest()->bootWith([
+        'runtime-mcp.auth.driver' => 'sanctum',
+        'runtime-mcp.auth.stdio_principal' => 'local-dev',
+        'runtime-mcp.auth.link_users' => ['kate' => 'nobody@example.com'],
+    ]);
+
+    expect(runCoreCheck(LinkedUsers::class))->toBe([[
+        'warn',
+        'auth.link_users has no effect: only the api_key driver links keys to users.',
+        'Remove auth.link_users, or set it to [].',
+    ]]);
+});
