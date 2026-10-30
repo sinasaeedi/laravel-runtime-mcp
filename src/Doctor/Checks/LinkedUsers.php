@@ -18,7 +18,8 @@ use SinaSaeedi\RuntimeMcp\Security\Auth\PrincipalResolver;
  *
  * Names the key, never the email (01-06; Sina, 2026-10-20): a deploy log is often public to a team.
  * Only the api_key driver links keys to users; with another driver a link has no effect (01-35), so a
- * link is never resolved there and never fails doctor.
+ * link is never resolved there and never fails doctor. One exception: the STDIO server runs as
+ * auth.stdio_principal with its link under every driver (01-06, McpServer), so that link is checked.
  */
 final class LinkedUsers implements Check
 {
@@ -35,14 +36,29 @@ final class LinkedUsers implements Check
     public function run(): array
     {
         $links = $this->config->get('runtime-mcp.auth.link_users');
+        $unused = [];
 
         if ($this->config->get('runtime-mcp.auth.driver') !== 'api_key') {
-            return [$links === null || $links === []
-                ? CheckResult::pass('Not used: auth.driver is not `api_key`.')
-                : CheckResult::warn(
-                    'auth.link_users has no effect: only the api_key driver links keys to users.',
-                    'Remove auth.link_users, or set it to [].',
-                )];
+            $stdio = $this->config->get('runtime-mcp.auth.stdio_principal');
+
+            if (! ApiKey::isValidName($stdio) || $links === null || $links === []
+                || (is_array($links) && ! array_key_exists($stdio, $links))) {
+                return [$links === null || $links === []
+                    ? CheckResult::pass('Not used: auth.driver is not `api_key`.')
+                    : CheckResult::warn(
+                        'auth.link_users has no effect: only the api_key driver links keys to users.',
+                        'Remove auth.link_users, or set it to [].',
+                    )];
+            }
+
+            if (is_array($links) && count($links) > 1) {
+                $unused[] = CheckResult::warn(
+                    'Only the link of auth.stdio_principal has an effect: only the api_key driver links keys to users.',
+                    'Keep only the auth.stdio_principal link in auth.link_users.',
+                );
+            }
+
+            $links = is_array($links) ? [$stdio => $links[$stdio]] : $links;
         }
 
         if ($links === null || $links === []) {
@@ -86,7 +102,7 @@ final class LinkedUsers implements Check
                         'Check auth.defaults.guard, its user provider, and that the users table exists.',
                     );
 
-                    return $results;
+                    return [...$results, ...$unused];
                 }
 
                 $results[] = CheckResult::fail(
@@ -97,9 +113,9 @@ final class LinkedUsers implements Check
         }
 
         if ($results === []) {
-            return [CheckResult::pass($found === 1 ? '1 linked key finds its user.' : "{$found} linked keys find their user.")];
+            return [CheckResult::pass($found === 1 ? '1 linked key finds its user.' : "{$found} linked keys find their user."), ...$unused];
         }
 
-        return $results;
+        return [...$results, ...$unused];
     }
 }
