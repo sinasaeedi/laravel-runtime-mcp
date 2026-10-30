@@ -12,6 +12,7 @@ use SinaSaeedi\RuntimeMcp\Doctor\CheckResult;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\Sanctum;
 use SinaSaeedi\RuntimeMcp\Doctor\Doctor;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Auth\CustomToken;
+use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Auth\QualifiedToken;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Auth\TokenUser;
 use SinaSaeedi\RuntimeMcp\Tests\Support\Tokens;
 
@@ -146,3 +147,31 @@ it('fails doctor for the sanctum driver with a user model that cannot own tokens
     expect(Artisan::call(DoctorCommand::NAME))->toBe(1)
         ->and(Artisan::output())->toContain('cannot own tokens');
 });
+
+// 01-35 re-review: denied_tables may name the table with its schema (DeniedTables), so the check gives
+// the token table the default schema of its connection, read from the config with no query.
+it('matches a denied_tables entry with the schema of the token connection', function (array $connection, string $entry, string $status) {
+    sanctumCheckBoot(['runtime-mcp.database.denied_tables' => [$entry]]);
+    config(['database.connections.sanctum_check' => $connection, 'database.default' => 'sanctum_check']);
+
+    expect(sanctumCheckRun()[1][0])->toBe($status);
+})->with([
+    'PostgreSQL, the public schema' => [['driver' => 'pgsql', 'database' => 'app', 'search_path' => 'public'], 'public.personal_access_tokens', 'pass'],
+    'PostgreSQL, another schema first' => [['driver' => 'pgsql', 'database' => 'app', 'search_path' => 'app,public'], 'public.personal_access_tokens', 'warn'],
+    'MySQL, the database name' => [['driver' => 'mysql', 'database' => 'shop'], 'shop.personal_access_tokens', 'pass'],
+    'MySQL, another database' => [['driver' => 'mysql', 'database' => 'shop'], 'other.personal_access_tokens', 'warn'],
+    'SQLite, main' => [['driver' => 'sqlite', 'database' => ':memory:'], 'main.personal_access_tokens', 'pass'],
+]);
+
+it('splits the schema-qualified table of a custom token model', function (string $entry, string $status) {
+    sanctumCheckBoot(['runtime-mcp.database.denied_tables' => [$entry]]);
+    SanctumConfig::usePersonalAccessTokenModel(QualifiedToken::class);
+
+    expect(sanctumCheckRun()[1])->toBe($status === 'pass'
+        ? ['pass', '`auth.tokens` is in denied_tables.', null]
+        : ['warn', '`auth.tokens` is not in denied_tables, so the read-only role may read token rows.', 'Put auth.tokens back in runtime-mcp.database.denied_tables.']);
+})->with([
+    'the exact entry' => ['auth.tokens', 'pass'],
+    'the table in any schema' => ['tokens', 'pass'],
+    'another schema' => ['public.tokens', 'warn'],
+]);
