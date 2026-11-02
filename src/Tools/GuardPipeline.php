@@ -8,7 +8,9 @@ use Illuminate\Contracts\Container\Container;
 use Illuminate\Pipeline\Pipeline;
 use LogicException;
 use SinaSaeedi\RuntimeMcp\Tools\Pipeline\AuditStage;
+use SinaSaeedi\RuntimeMcp\Tools\Pipeline\CapOutputStage;
 use SinaSaeedi\RuntimeMcp\Tools\Pipeline\CheckGateStage;
+use SinaSaeedi\RuntimeMcp\Tools\Pipeline\RateLimitStage;
 use SinaSaeedi\RuntimeMcp\Tools\Pipeline\ReadOnlyStage;
 use SinaSaeedi\RuntimeMcp\Tools\Pipeline\RedactStage;
 use SinaSaeedi\RuntimeMcp\Tools\Pipeline\ResolvePrincipalStage;
@@ -27,11 +29,11 @@ final class GuardPipeline
     /** Outermost first. The order is the security design; PipelineOrderTest pins it. */
     public const STAGES = [
         AuditStage::class,               // 9: outermost, sees every outcome, writes last
-        // 01-17 inserts Pipeline\CapOutputStage here (8)
+        CapOutputStage::class,           // 8: measures the redacted result
         RedactStage::class,              // 7
         ResolvePrincipalStage::class,    // 1
         CheckGateStage::class,           // 2
-        // 01-17 inserts Pipeline\RateLimitStage here (3)
+        RateLimitStage::class,           // 3: after the Gate, so a denied call uses no budget
         ReadOnlyStage::class,            // 4 on the way in, 6 on the way out: innermost, around the tool only
     ];
 
