@@ -27,6 +27,12 @@ use SinaSaeedi\RuntimeMcp\Tests\TestCase;
  */
 const NO_DATABASE_PLUGINS = ['runtime-mcp.plugins.database' => false, 'runtime-mcp.plugins.models' => false];
 
+/*
+ * Testbench's cache store is array, which the Limits check warns about in a strict environment (01-17
+ * triage). A test that counts lines puts the limiter on the file store; LimitsCheckTest LC6 tests the store.
+ */
+const SHARED_LIMITER_STORE = ['cache.limiter' => 'file'];
+
 /** @return array{int, string} the exit code and the whole output */
 function callDoctorCommand(): array
 {
@@ -36,14 +42,14 @@ function callDoctorCommand(): array
 }
 
 it('prints a healthy strict report: the header, a pass line per core check, exit 0', function () {
-    currentTest()->bootWith(['runtime-mcp.enabled' => true, ...NO_DATABASE_PLUGINS], 'production');
+    currentTest()->bootWith([...SHARED_LIMITER_STORE, 'runtime-mcp.enabled' => true, ...NO_DATABASE_PLUGINS], 'production');
 
     [$code, $output] = callDoctorCommand();
     $version = app(RuntimeServer::class)->version();
 
     expect($code)->toBe(0)
         ->and($output)->toContain("Runtime MCP doctor — Runtime Test (production), strict, package {$version}")
-        ->and(substr_count($output, '✓'))->toBe(16)
+        ->and(substr_count($output, '✓'))->toBe(17)
         ->and(str_contains($output, '✗'))->toBeFalse()
         ->and(str_contains($output, '→'))->toBeFalse()
         ->and($output)->toContain('✓ Endpoint')
@@ -51,6 +57,7 @@ it('prints a healthy strict report: the header, a pass line per core check, exit
         ->and($output)->toContain('Every boot rule passes.')
         ->and($output)->toContain('Statements time out after 5000 ms.')
         ->and($output)->toContain('Read tools run in a read-only transaction on 1 connection.')
+        ->and($output)->toContain('120 calls per minute per key; db_query 60 calls per minute; results at most 100000 bytes.')
         ->and($output)->toContain('Every check passes.')
         ->and(str_contains($output, '<fg='))->toBeFalse();
 });
@@ -62,7 +69,7 @@ it('says relaxed in the header of a relaxed environment', function () {
 });
 
 it('prints a failure with its fix on the next line, and exits 1', function () {
-    currentTest()->bootWith(['runtime-mcp.enabled' => true, ...NO_DATABASE_PLUGINS, 'runtime-mcp.redaction.extra_patterns' => ['/ok/', '/(unclosed/']], 'production');
+    currentTest()->bootWith([...SHARED_LIMITER_STORE, 'runtime-mcp.enabled' => true, ...NO_DATABASE_PLUGINS, 'runtime-mcp.redaction.extra_patterns' => ['/ok/', '/(unclosed/']], 'production');
 
     [$code, $output] = callDoctorCommand();
 
@@ -72,7 +79,7 @@ it('prints a failure with its fix on the next line, and exits 1', function () {
 });
 
 it('exits 1 for a boot rule failure in a strict environment, and says the endpoint stays off', function () {
-    currentTest()->bootWith(['runtime-mcp.enabled' => true, ...NO_DATABASE_PLUGINS, 'runtime-mcp.auth.api_keys' => null], 'production');
+    currentTest()->bootWith([...SHARED_LIMITER_STORE, 'runtime-mcp.enabled' => true, ...NO_DATABASE_PLUGINS, 'runtime-mcp.auth.api_keys' => null], 'production');
 
     [$code, $output] = callDoctorCommand();
 
@@ -84,7 +91,7 @@ it('exits 1 for a boot rule failure in a strict environment, and says the endpoi
 });
 
 it('runs every rule when the endpoint is off: a warning for the endpoint, and still exit 1', function () {
-    currentTest()->bootWith(['runtime-mcp.enabled' => false, ...NO_DATABASE_PLUGINS, 'runtime-mcp.auth.api_keys' => null], 'production');
+    currentTest()->bootWith([...SHARED_LIMITER_STORE, 'runtime-mcp.enabled' => false, ...NO_DATABASE_PLUGINS, 'runtime-mcp.auth.api_keys' => null], 'production');
 
     [$code, $output] = callDoctorCommand();
 
@@ -96,7 +103,7 @@ it('runs every rule when the endpoint is off: a warning for the endpoint, and st
 });
 
 it('exits 0 with warnings only', function () {
-    currentTest()->bootWith(['runtime-mcp.enabled' => true, ...NO_DATABASE_PLUGINS, 'runtime-mcp.plugins.horizon' => true], 'production');
+    currentTest()->bootWith([...SHARED_LIMITER_STORE, 'runtime-mcp.enabled' => true, ...NO_DATABASE_PLUGINS, 'runtime-mcp.plugins.horizon' => true], 'production');
 
     [$code, $output] = callDoctorCommand();
 
@@ -149,7 +156,7 @@ it('fails for an empty host list and for a bad route', function (array $config, 
 
 it('counts plugin results like core results', function () {
     // The plugins value names only the fake list, or the base plugins left out of it are unknown keys.
-    currentTest()->bootWith(['runtime-mcp.enabled' => true, 'runtime-mcp.plugins' => ['core' => true]], 'production', BootCapture::plugins([CorePlugin::class, FakeDoctorPlugin::class]));
+    currentTest()->bootWith([...SHARED_LIMITER_STORE, 'runtime-mcp.enabled' => true, 'runtime-mcp.plugins' => ['core' => true]], 'production', BootCapture::plugins([CorePlugin::class, FakeDoctorPlugin::class]));
 
     [$code, $output] = callDoctorCommand();
 
@@ -164,7 +171,7 @@ it('counts plugin results like core results', function () {
 });
 
 it('fails a privilege check in a strict environment and only warns in a relaxed one (spec 4.6)', function (string $environment, int $code, string $glyph, string $footer) {
-    currentTest()->bootWith(['runtime-mcp.enabled' => true, 'runtime-mcp.plugins' => ['core' => true]], $environment, BootCapture::plugins([CorePlugin::class, FakePrivilegeDoctorPlugin::class]));
+    currentTest()->bootWith([...SHARED_LIMITER_STORE, 'runtime-mcp.enabled' => true, 'runtime-mcp.plugins' => ['core' => true]], $environment, BootCapture::plugins([CorePlugin::class, FakePrivilegeDoctorPlugin::class]));
 
     [$exit, $output] = callDoctorCommand();
 

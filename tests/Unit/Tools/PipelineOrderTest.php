@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 use SinaSaeedi\RuntimeMcp\Tools\GuardPipeline;
 use SinaSaeedi\RuntimeMcp\Tools\Pipeline\AuditStage;
+use SinaSaeedi\RuntimeMcp\Tools\Pipeline\CapOutputStage;
 use SinaSaeedi\RuntimeMcp\Tools\Pipeline\CheckGateStage;
+use SinaSaeedi\RuntimeMcp\Tools\Pipeline\RateLimitStage;
 use SinaSaeedi\RuntimeMcp\Tools\Pipeline\ReadOnlyStage;
 use SinaSaeedi\RuntimeMcp\Tools\Pipeline\RedactStage;
 use SinaSaeedi\RuntimeMcp\Tools\Pipeline\ResolvePrincipalStage;
@@ -17,9 +19,11 @@ use SinaSaeedi\RuntimeMcp\Tools\Pipeline\ResolvePrincipalStage;
 it('runs the stages in the spec 4.4 order, outermost first', function () {
     expect(GuardPipeline::STAGES)->toBe([
         AuditStage::class,
+        CapOutputStage::class,
         RedactStage::class,
         ResolvePrincipalStage::class,
         CheckGateStage::class,
+        RateLimitStage::class,
         ReadOnlyStage::class,
     ]);
 });
