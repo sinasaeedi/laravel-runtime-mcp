@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SinaSaeedi\RuntimeMcp\Audit;
 
+use Illuminate\Cache\RateLimiter;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Debug\ExceptionHandler;
@@ -13,6 +14,7 @@ use SinaSaeedi\RuntimeMcp\Audit\Events\AuthFailed;
 use SinaSaeedi\RuntimeMcp\Audit\Events\ToolCalled;
 use SinaSaeedi\RuntimeMcp\Audit\Events\ToolDenied;
 use SinaSaeedi\RuntimeMcp\Audit\Events\ToolFailed;
+use SinaSaeedi\RuntimeMcp\Security\RateLimiting\CounterNotStored;
 use SinaSaeedi\RuntimeMcp\Security\Redaction\Redactor;
 use Throwable;
 
@@ -35,10 +37,28 @@ final class AuditLogger
     private const JSON_FLAGS = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
         | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR;
 
+    /**
+     * 01-17 Part D (Sina, 2026-10-28): past this many denied tool calls of one principal in one minute,
+     * a denied entry keeps no params, so one key cannot fill the disk through the audit. A constant, not
+     * a config key (01-17 audit, Q2).
+     */
+    public const DENIED_CALLS_PER_MINUTE = 120;
+
+    /** The params of a denied entry past the threshold. %d is the threshold. */
+    public const PARAMS_OMITTED = '[params omitted: more than %d denied calls in 1 minute]';
+
+    /** @param  int  $deniedCallsPerMinute  tests lower it; the container uses the default */
     public function __construct(
         private readonly Container $container,
         private readonly Repository $config,
+        private readonly int $deniedCallsPerMinute = self::DENIED_CALLS_PER_MINUTE,
     ) {}
+
+    /** The denied-call counter of one principal; "[none]" for an entry without one. */
+    public static function deniedKey(string $environment, ?string $principal): string
+    {
+        return "runtime-mcp:{$environment}:denied:".($principal ?? '[none]');
+    }
 
     /**
      * Writes a tool call entry, then dispatches ToolCalled, ToolDenied or ToolFailed.
@@ -47,6 +67,10 @@ final class AuditLogger
      */
     public function toolCall(AuditEntry $entry): void
     {
+        if ($this->overDeniedThreshold($entry)) {
+            $entry = $entry->withParams(['_omitted' => sprintf(self::PARAMS_OMITTED, $this->deniedCallsPerMinute)]);
+        }
+
         try {
             $stored = $this->write($entry);
         } catch (Throwable $e) {
@@ -75,6 +99,33 @@ final class AuditLogger
         }
 
         $this->dispatch(new AuthFailed($stored));
+    }
+
+    /**
+     * Counts a denied entry; true past the threshold. A counter that throws (the cache is down) gives
+     * true: the short entry is always safe to write, and the call is denied anyway. Never throws, so it
+     * never becomes AuditUnavailable. An allowed entry is never counted.
+     */
+    private function overDeniedThreshold(AuditEntry $entry): bool
+    {
+        if ($entry->decision !== AuditEntry::DECISION_DENIED) {
+            return false;
+        }
+
+        try {
+            $hits = $this->container->make(RateLimiter::class)->hit(self::deniedKey($entry->environment, $entry->principal), 60);
+
+            // A store that loses the write without an error (null, a Memcached outage) counts 0: the cache is down too.
+            if ($hits < 1) {
+                throw new CounterNotStored;
+            }
+
+            return $hits > $this->deniedCallsPerMinute;
+        } catch (Throwable $e) {
+            $this->report($e);
+
+            return true;
+        }
     }
 
     /** Redacts and caps the params, then writes the entry. Returns the stored entry. */
