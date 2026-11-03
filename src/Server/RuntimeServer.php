@@ -54,7 +54,8 @@ final class RuntimeServer
         return $this->plugins->tools();
     }
 
-    private function appName(): string
+    /** config('app.name') when it is a non-empty string, else 'Laravel'. app_info uses it too (01-18). */
+    public function appName(): string
     {
         $name = $this->config->get('app.name');
 

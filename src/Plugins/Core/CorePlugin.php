@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SinaSaeedi\RuntimeMcp\Plugins\Core;
 
 use SinaSaeedi\RuntimeMcp\Plugins\AbstractPlugin;
+use SinaSaeedi\RuntimeMcp\Plugins\Core\Tools\AppInfo;
 
 /** Base plugin (spec 4.2): no package needed, on by default. Tools: app_info (01-18). */
 final class CorePlugin extends AbstractPlugin
@@ -32,5 +33,10 @@ final class CorePlugin extends AbstractPlugin
     public function requiresReadOnlyConnection(): bool
     {
         return false;
+    }
+
+    public function tools(): array
+    {
+        return [AppInfo::class];
     }
 }
