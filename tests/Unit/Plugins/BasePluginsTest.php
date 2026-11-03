@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use SinaSaeedi\RuntimeMcp\Plugins\Contracts\Plugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Core\CorePlugin;
+use SinaSaeedi\RuntimeMcp\Plugins\Core\Tools\AppInfo;
 use SinaSaeedi\RuntimeMcp\Plugins\Database\DatabasePlugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Logs\LogsPlugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Models\ModelsPlugin;
@@ -12,7 +13,7 @@ use SinaSaeedi\RuntimeMcp\Plugins\Queue\QueuePlugin;
 
 // Each tool story (01-18 to 01-26) updates the expected tools() list of its plugin here.
 dataset('base plugins', [
-    'core' => [CorePlugin::class, 'core', 'app_', false, []],
+    'core' => [CorePlugin::class, 'core', 'app_', false, [AppInfo::class]],
     'models' => [ModelsPlugin::class, 'models', 'model_', true, []],
     'database' => [DatabasePlugin::class, 'database', 'db_', true, []],
     'queue' => [QueuePlugin::class, 'queue', 'queue_', false, []],
