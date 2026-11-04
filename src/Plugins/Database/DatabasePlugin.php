@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SinaSaeedi\RuntimeMcp\Plugins\Database;
 
 use SinaSaeedi\RuntimeMcp\Plugins\AbstractPlugin;
+use SinaSaeedi\RuntimeMcp\Plugins\Database\Tools\DbSchema;
 
 /** Base plugin (spec 4.2): no package needed, on by default. Tools: db_schema (01-19), db_query (01-20). */
 final class DatabasePlugin extends AbstractPlugin
@@ -32,5 +33,10 @@ final class DatabasePlugin extends AbstractPlugin
     public function requiresReadOnlyConnection(): bool
     {
         return true;
+    }
+
+    public function tools(): array
+    {
+        return [DbSchema::class];
     }
 }
