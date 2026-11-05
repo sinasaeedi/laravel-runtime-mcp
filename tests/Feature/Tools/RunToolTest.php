@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Exceptions;
+use SinaSaeedi\RuntimeMcp\Audit\Reason;
+use SinaSaeedi\RuntimeMcp\Tools\AuthorizationDenied;
 use SinaSaeedi\RuntimeMcp\Tools\Contracts\RuntimeTool;
 use SinaSaeedi\RuntimeMcp\Tools\Pipeline\RunTool;
 use SinaSaeedi\RuntimeMcp\Tools\Tier;
@@ -137,3 +139,18 @@ it('gives the default from get() for an argument sent as null, and keeps the nul
 
     expect($outcome->result->data)->toBe(['get' => 50, 'all' => ['limit' => null]]);
 });
+
+it('turns an AuthorizationDenied from the tool into a denied outcome with its reason, and does not report it (01-21)', function (Reason $reason) {
+    Exceptions::fake();
+
+    $outcome = runToolWith([], [], fn (ToolInput $input): ToolResult => throw new AuthorizationDenied($reason, 'Access denied: the `view` Policy said no.'));
+
+    expect($outcome->allowed)->toBeFalse()
+        ->and($outcome->reason)->toBe($reason)
+        ->and($outcome->isError)->toBeTrue()
+        ->and($outcome->errorClass)->toBeNull()
+        ->and($outcome->result->status->value)->toBe('unavailable')
+        ->and($outcome->result->note)->toBe('Access denied: the `view` Policy said no.');
+
+    Exceptions::assertNothingReported();
+})->with([Reason::PolicyDenied, Reason::GateError]);

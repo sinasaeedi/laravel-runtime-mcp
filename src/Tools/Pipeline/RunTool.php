@@ -12,6 +12,7 @@ use Illuminate\Validation\ValidationException;
 use JsonSerializable;
 use SinaSaeedi\RuntimeMcp\Security\ReadOnly\WriteAttemptExplainer;
 use SinaSaeedi\RuntimeMcp\Security\Redaction\Redactor;
+use SinaSaeedi\RuntimeMcp\Tools\AuthorizationDenied;
 use SinaSaeedi\RuntimeMcp\Tools\ToolCall;
 use SinaSaeedi\RuntimeMcp\Tools\ToolInput;
 use SinaSaeedi\RuntimeMcp\Tools\ToolOutcome;
@@ -63,6 +64,9 @@ final class RunTool
 
             // Inside the read-only transaction: redaction (stage 7) runs after the rollback (6).
             return ToolOutcome::success($result->withContent(self::plain($result->data), $result->note));
+        } catch (AuthorizationDenied $e) {
+            // A Policy inside the tool said no (01-21): a denial, audited with its reason, never reported.
+            return ToolOutcome::denied($e->reason, $e->getMessage());
         } catch (Throwable $e) {
             // Spec 4.4: the full exception goes to the app's log; the agent gets the class and the
             // redacted message. A write that the read-only transaction blocked gets its own note (01-16).
