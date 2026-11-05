@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use SinaSaeedi\RuntimeMcp\Mcp\EnvelopeSchema;
 use SinaSaeedi\RuntimeMcp\Plugins\Database\DatabasePlugin;
+use SinaSaeedi\RuntimeMcp\Plugins\Database\Tools\DbQuery;
 use SinaSaeedi\RuntimeMcp\Plugins\Database\Tools\DbSchema;
 use SinaSaeedi\RuntimeMcp\Security\Sql\ReadOnlySession;
 use SinaSaeedi\RuntimeMcp\Tests\Support\AuditLog;
@@ -53,7 +54,7 @@ it('DS1 keeps the tool contract: name, read tier, ability, schema and rules agre
     expect($tool->name())->toBe('db_schema')
         ->and($tool->tier())->toBe(Tier::Read)
         ->and($tool->ability())->toBe('runtime-mcp.db_schema')
-        ->and((new DatabasePlugin)->tools())->toBe([DbSchema::class]);
+        ->and((new DatabasePlugin)->tools())->toBe([DbSchema::class, DbQuery::class]);
 });
 
 it('DS2 is unavailable on a SQLite read-only connection, and names the driver', function (ProtocolEra $era, array $arguments) {

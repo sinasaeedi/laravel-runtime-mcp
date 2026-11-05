@@ -65,10 +65,12 @@ final class QueryRunner
     {
         // From the statement, not the rows: an empty result still has its columns, and a duplicate name stays.
         $columns = [];
+        $types = [];
 
         for ($i = 0; $i < $statement->columnCount(); $i++) {
             $meta = $statement->getColumnMeta($i);
             $columns[] = $meta === false ? '' : $meta['name'];
+            $types[] = $meta !== false && is_string($meta['native_type'] ?? null) ? $meta['native_type'] : null;
         }
 
         // At most $maxRows + 1: the database limited them.
@@ -81,7 +83,7 @@ final class QueryRunner
         $hasMore = count($rows) > $maxRows;
         $rows = array_slice($rows, 0, $maxRows);
 
-        return new QueryResult($columns, $rows, count($rows), $hasMore, $strategy, $maria);
+        return new QueryResult($columns, $rows, count($rows), $hasMore, $strategy, $maria, $types);
     }
 
     /** JSON safety only; every other value stays as PDO returned it. */

@@ -84,7 +84,7 @@ it('answers an unknown name with the JSON-RPC error of laravel/mcp, and audits i
 it('gives exactly the text and code of laravel/mcp\'s own handler', function (mixed $name) {
     expect(unknownToolError(app(CallTool::class), unknownToolRequest($name)))
         ->toBe(unknownToolError(new LaravelCallTool, unknownToolRequest($name)));
-})->with(['nope_tool', 'db_query']);
+})->with(['nope_tool', 'db_table_stats']); // a v1.3.0 name: db_query is a real tool since 01-20
 
 it('keeps the whole name in the error and cuts it to 64 characters in the audit', function () {
     FixtureTools::serve();

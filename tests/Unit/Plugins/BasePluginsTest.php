@@ -6,6 +6,7 @@ use SinaSaeedi\RuntimeMcp\Plugins\Contracts\Plugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Core\CorePlugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Core\Tools\AppInfo;
 use SinaSaeedi\RuntimeMcp\Plugins\Database\DatabasePlugin;
+use SinaSaeedi\RuntimeMcp\Plugins\Database\Tools\DbQuery;
 use SinaSaeedi\RuntimeMcp\Plugins\Database\Tools\DbSchema;
 use SinaSaeedi\RuntimeMcp\Plugins\Logs\LogsPlugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Models\ModelsPlugin;
@@ -16,7 +17,7 @@ use SinaSaeedi\RuntimeMcp\Plugins\Queue\QueuePlugin;
 dataset('base plugins', [
     'core' => [CorePlugin::class, 'core', 'app_', false, [AppInfo::class]],
     'models' => [ModelsPlugin::class, 'models', 'model_', true, []],
-    'database' => [DatabasePlugin::class, 'database', 'db_', true, [DbSchema::class]],
+    'database' => [DatabasePlugin::class, 'database', 'db_', true, [DbSchema::class, DbQuery::class]],
     'queue' => [QueuePlugin::class, 'queue', 'queue_', false, []],
     'logs' => [LogsPlugin::class, 'logs', 'logs_', false, []],
 ]);
