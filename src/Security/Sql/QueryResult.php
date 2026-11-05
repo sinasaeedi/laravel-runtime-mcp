@@ -10,6 +10,7 @@ final readonly class QueryResult
     /**
      * @param  list<string>  $columns  in column order, also for an empty result; duplicate names are kept
      * @param  list<list<mixed>>  $rows  each row a list in column order
+     * @param  list<string|null>  $types  each column's getColumnMeta() native_type, null when the driver gives none (01-20)
      */
     public function __construct(
         public array $columns,
@@ -21,5 +22,7 @@ final readonly class QueryResult
         public LimitStrategy $strategy,
         // MariaDB ignores an ORDER BY inside the derived table unless the query has its own LIMIT.
         public bool $orderMayBeLost,
+        // Last, so 01-15's argument order stays. db_query (01-20) converts timestamps and floats by these.
+        public array $types = [],
     ) {}
 }
