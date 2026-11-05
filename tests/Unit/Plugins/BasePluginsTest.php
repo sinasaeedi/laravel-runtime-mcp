@@ -10,13 +10,14 @@ use SinaSaeedi\RuntimeMcp\Plugins\Database\Tools\DbQuery;
 use SinaSaeedi\RuntimeMcp\Plugins\Database\Tools\DbSchema;
 use SinaSaeedi\RuntimeMcp\Plugins\Logs\LogsPlugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Models\ModelsPlugin;
+use SinaSaeedi\RuntimeMcp\Plugins\Models\Tools\ModelShow;
 use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\QueuePlugin;
 
 // Each tool story (01-18 to 01-26) updates the expected tools() list of its plugin here.
 dataset('base plugins', [
     'core' => [CorePlugin::class, 'core', 'app_', false, [AppInfo::class]],
-    'models' => [ModelsPlugin::class, 'models', 'model_', true, []],
+    'models' => [ModelsPlugin::class, 'models', 'model_', true, [ModelShow::class]],
     'database' => [DatabasePlugin::class, 'database', 'db_', true, [DbSchema::class, DbQuery::class]],
     'queue' => [QueuePlugin::class, 'queue', 'queue_', false, []],
     'logs' => [LogsPlugin::class, 'logs', 'logs_', false, []],

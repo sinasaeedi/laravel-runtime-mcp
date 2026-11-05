@@ -41,6 +41,7 @@ it('runs the core checks in the order of Doctor::CHECKS', function () {
         'Endpoint', 'Boot rules', 'Sanctum', 'Linked users', 'STDIO principal', 'Route',
         'Allowed hosts', 'Allowed origins', 'Redaction patterns', 'Mask lists', 'Read-only role', 'Plugins', 'Audit log',
         'Statement timeout', 'Read-only transactions', 'Read-only connection', 'Limits',
+        'Models', // the models plugin's check (01-21), after the core checks
     ])
         ->and(count(Doctor::CHECKS))->toBe(17);
 });
@@ -77,7 +78,8 @@ it('turns a check that throws into one Fail line with the class only, and runs t
 });
 
 it('names a check that cannot be built by its class', function () {
-    currentTest()->bootWith([], 'production');
+    // The models plugin is off: its own check (01-21) would add a line.
+    currentTest()->bootWith(['runtime-mcp.plugins.models' => false], 'production');
 
     $lines = (new Doctor(app(), app(PluginRegistry::class), app(Environment::class), [UnbuildableCheck::class]))->run()->lines;
 
