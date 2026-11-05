@@ -620,8 +620,9 @@ final class ModelShow extends RuntimeTool
         // A through relation's join key, not a column of the related record.
         unset($array['laravel_through_key']);
 
-        foreach (array_keys($array) as $key) {
-            if (! is_string($key) || (! in_array($key, $model->getDates(), true) && ! $model->hasCast($key, self::DATE_CASTS))) {
+        // Attribute names are strings; Larastan 3.14+ types toArray() keys as string, older versions as array-key.
+        foreach (array_filter(array_keys($array), is_string(...)) as $key) {
+            if (! in_array($key, $model->getDates(), true) && ! $model->hasCast($key, self::DATE_CASTS)) {
                 continue;
             }
 
