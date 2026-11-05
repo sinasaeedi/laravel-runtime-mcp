@@ -12,6 +12,7 @@ use SinaSaeedi\RuntimeMcp\Security\Grants\DeniedTables;
 use SinaSaeedi\RuntimeMcp\Security\Grants\InvalidGrantConfig;
 use SinaSaeedi\RuntimeMcp\Security\Grants\SchemaSnapshot;
 use SinaSaeedi\RuntimeMcp\Security\Sql\Exceptions\NotInReadOnlyTransaction;
+use SinaSaeedi\RuntimeMcp\Security\Sql\Exceptions\QueryPermissionDenied;
 use SinaSaeedi\RuntimeMcp\Security\Sql\Exceptions\QueryRejected;
 use SinaSaeedi\RuntimeMcp\Security\Sql\ReadOnlySession;
 use SinaSaeedi\RuntimeMcp\Security\UnsupportedDriver;
@@ -138,6 +139,43 @@ final class ReadableSchema
 
             return $names;
         });
+    }
+
+    /**
+     * Whether the role can SELECT every column of the table: the database's own check, by a SELECT * that
+     * returns no row (rule 13: the grants are the one column mechanism). MySQL and MariaDB show the role
+     * only its readable columns, so the catalog cannot tell. False when the table is unknown, denied or
+     * has a column the role cannot read.
+     *
+     * 01-20 triage: a permission error that names a bare table can be about another table of that name
+     * (another database or schema) or another privilege (MySQL SELECT … FOR UPDATE).
+     *
+     * @param  string  $table  "name" or "schema.name"
+     *
+     * @throws InvalidGrantConfig
+     * @throws UnsupportedDriver
+     * @throws QueryRejected
+     * @throws NotInReadOnlyTransaction
+     */
+    public function readsEveryColumn(string $table): bool
+    {
+        $denied = DeniedTables::fromConfig($this->config);
+
+        try {
+            return $this->session->run(function (Connection $ro) use ($denied, $table): bool {
+                $found = $this->find($ro, $denied, $table);
+
+                if ($found === null) {
+                    return false;
+                }
+
+                self::select($ro, 'select * from '.self::identifier($ro, $found['schema']).'.'.self::identifier($ro, $found['name']).' limit 0');
+
+                return true;
+            });
+        } catch (QueryPermissionDenied) {
+            return false;
+        }
     }
 
     /**
@@ -428,6 +466,14 @@ final class ReadableSchema
     private static function escaped(Connection $connection, string $name): string
     {
         return substr($connection->escape($name), 1, -1);
+    }
+
+    /** A catalog name as a quoted identifier: no table prefix, the quote character doubled. */
+    private static function identifier(Connection $ro, string $name): string
+    {
+        return $ro->getDriverName() === 'pgsql'
+            ? '"'.str_replace('"', '""', $name).'"'
+            : '`'.str_replace('`', '``', $name).'`';
     }
 
     /**
