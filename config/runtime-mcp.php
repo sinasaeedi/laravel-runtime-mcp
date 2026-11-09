@@ -69,7 +69,7 @@ return [
 
     // Spec 6.5. Used first by 01-22.
     'queue' => [
-        'names' => null, // null = the default queue of each connection
+        'names' => null, // null = the default queue of the default connection; a list = queues on it; a map = connection => queues
     ],
 
     // Spec 6.9. Used first by 01-25.
