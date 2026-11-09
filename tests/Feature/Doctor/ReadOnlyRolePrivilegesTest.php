@@ -32,7 +32,8 @@ it('is the Read-only role check, right after Mask lists', function () {
 });
 
 it('passes with Not needed when no active plugin reads the database', function () {
-    currentTest()->bootWith(['runtime-mcp.plugins.database' => false, 'runtime-mcp.plugins.models' => false]);
+    // 01-23: with Testbench's database-uuids table the queue plugin reads the database too; a file does not.
+    currentTest()->bootWith(['runtime-mcp.plugins.database' => false, 'runtime-mcp.plugins.models' => false, 'queue.failed.driver' => 'file']);
 
     expect(readOnlyRoleResults())->toBe([['pass', 'Not needed: no active plugin reads the database.', null, false]]);
 });

@@ -43,6 +43,7 @@ it('runs the core checks in the order of Doctor::CHECKS', function () {
         'Statement timeout', 'Read-only transactions', 'Read-only connection', 'Limits',
         'Models', // the models plugin's check (01-21), after the core checks
         'Queues', // the queue plugin's check (01-22)
+        'Failed jobs', // the queue plugin's second check (01-23)
     ])
         ->and(count(Doctor::CHECKS))->toBe(17);
 });

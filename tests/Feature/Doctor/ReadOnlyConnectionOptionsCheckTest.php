@@ -34,7 +34,8 @@ function readOnlyOptionsKey(string $key): string
 }
 
 it('RC1 passes when no active plugin reads the database', function () {
-    expect(readOnlyOptionsResults(['runtime-mcp.plugins.database' => false, 'runtime-mcp.plugins.models' => false, readOnlyOptionsKey('options') => [PDO::ATTR_PERSISTENT => true]]))
+    // 01-23: with Testbench's database-uuids table the queue plugin reads the database too; a file does not.
+    expect(readOnlyOptionsResults(['runtime-mcp.plugins.database' => false, 'runtime-mcp.plugins.models' => false, 'queue.failed.driver' => 'file', readOnlyOptionsKey('options') => [PDO::ATTR_PERSISTENT => true]]))
         ->toBe([['pass', 'Not needed: no active plugin reads the database.']]);
 });
 

@@ -79,7 +79,7 @@ it('Boot rules: a warning issue is a warn, in rule order after the errors before
 
     expect(runCoreCheck(BootRules::class))->toBe([
         ['fail', '`api_keys.format`: RUNTIME_MCP_API_KEYS entry 1 is not in the name:sha256hex format.', null],
-        ['warn', '`database.connection`: RUNTIME_MCP_DB_CONNECTION is not set. The `models` and `database` plugins need a separate read-only connection.', null],
+        ['warn', '`database.connection`: RUNTIME_MCP_DB_CONNECTION is not set. The `models`, `database` and `queue` plugins need a separate read-only connection.', null],
     ]);
 });
 

@@ -78,7 +78,7 @@ it('puts the environment and every issue in the critical line context, with no s
             'environment' => 'production',
             'issues' => [
                 ['rule' => 'api_keys.format', 'severity' => 'error', 'message' => 'RUNTIME_MCP_API_KEYS entry 2 is not in the name:sha256hex format.'],
-                ['rule' => 'database.connection', 'severity' => 'error', 'message' => 'RUNTIME_MCP_DB_CONNECTION is not set. The `models` and `database` plugins need a separate read-only connection.'],
+                ['rule' => 'database.connection', 'severity' => 'error', 'message' => 'RUNTIME_MCP_DB_CONNECTION is not set. The `models`, `database` and `queue` plugins need a separate read-only connection.'],
             ],
         ])
         ->and(str_contains((string) json_encode($boot->log->records), $entry))->toBeFalse();
@@ -93,7 +93,7 @@ it('passes every issue, warnings too, in the event', function () {
 
     expect(array_map(fn (BootIssue $issue): array => $issue->toArray(), $boot->events[0]->issues ?? []))->toBe([
         ['rule' => 'api_keys.present', 'severity' => 'warning', 'message' => 'RUNTIME_MCP_API_KEYS is empty, so the HTTP endpoint stays off. The STDIO server runs as `local-dev`.'],
-        ['rule' => 'database.connection', 'severity' => 'error', 'message' => 'RUNTIME_MCP_DB_CONNECTION names `testing`, the default connection. The `models` and `database` plugins need a separate read-only connection.'],
+        ['rule' => 'database.connection', 'severity' => 'error', 'message' => 'RUNTIME_MCP_DB_CONNECTION names `testing`, the default connection. The `models`, `database` and `queue` plugins need a separate read-only connection.'],
     ])
         ->and($boot->warnings())->toBe(['Runtime MCP: RUNTIME_MCP_API_KEYS is empty, so the HTTP endpoint stays off. The STDIO server runs as `local-dev`.'])
         ->and(Mcp::getLocalServer('runtime-mcp'))->toBeNull();
