@@ -47,12 +47,7 @@ final class DbSchema extends RuntimeTool
     public const REFUSED = 'The database refused the schema read (SQLSTATE %s).';
 
     /** ReadOnlySession's fixed notes: package text, safe to show as they are (as 01-20). */
-    public const FIXED_NOTES = [
-        ReadOnlySession::CONNECTION_FAILED,
-        ReadOnlySession::SESSION_LOST,
-        ReadOnlySession::PERSISTENT,
-        ReadOnlySession::NO_READ_ONLY_CONNECTION,
-    ];
+    public const FIXED_NOTES = ReadOnlySession::FIXED_NOTES;
 
     public function __construct(
         private readonly ReadableSchema $schema,
