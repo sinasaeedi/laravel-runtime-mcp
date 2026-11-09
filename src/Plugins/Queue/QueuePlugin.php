@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 namespace SinaSaeedi\RuntimeMcp\Plugins\Queue;
 
+use Illuminate\Contracts\Config\Repository;
 use SinaSaeedi\RuntimeMcp\Plugins\AbstractPlugin;
+use SinaSaeedi\RuntimeMcp\Plugins\Queue\Doctor\QueuesCheck;
+use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueOverview;
 
 /** Base plugin (spec 4.2): no package needed, on by default. Tools: queue_overview, queue_failed_jobs_list, queue_failed_jobs_summary, queue_failed_job_show (01-22 to 01-24). */
 final class QueuePlugin extends AbstractPlugin
 {
+    public function __construct(private readonly Repository $config) {}
+
     public function name(): string
     {
         return 'queue';
@@ -32,5 +37,15 @@ final class QueuePlugin extends AbstractPlugin
     public function requiresReadOnlyConnection(): bool
     {
         return false;
+    }
+
+    public function tools(): array
+    {
+        return [QueueOverview::class];
+    }
+
+    public function doctorChecks(): array
+    {
+        return [new QueuesCheck(new WatchedQueues($this->config))];
     }
 }
