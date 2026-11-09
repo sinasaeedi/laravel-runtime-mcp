@@ -38,6 +38,9 @@ final class ReadOnlySession
 
     public const NO_READ_ONLY_CONNECTION = 'RUNTIME_MCP_DB_CONNECTION is not set or names the default connection, and a strict environment runs no package query on the default connection. The query was not run.';
 
+    /** The fixed messages above: package text, safe to show as a note (01-19, 01-20, 01-23). */
+    public const FIXED_NOTES = [self::CONNECTION_FAILED, self::SESSION_LOST, self::PERSISTENT, self::NO_READ_ONLY_CONNECTION];
+
     public function __construct(
         private readonly DatabaseManager $db,
         private readonly Repository $config,
