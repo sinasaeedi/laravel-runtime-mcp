@@ -72,8 +72,8 @@ it('only warns, and registers the endpoint, when database.connection is unset or
 
     currentTest()->mcpPost('initialize')->assertOk();
 })->with([
-    'unset' => [null, 'RUNTIME_MCP_DB_CONNECTION is not set. The `models` and `database` plugins need a separate read-only connection.'],
-    'the default' => ['testing', 'RUNTIME_MCP_DB_CONNECTION names `testing`, the default connection. The `models` and `database` plugins need a separate read-only connection.'],
+    'unset' => [null, 'RUNTIME_MCP_DB_CONNECTION is not set. The `models`, `database` and `queue` plugins need a separate read-only connection.'],
+    'the default' => ['testing', 'RUNTIME_MCP_DB_CONNECTION names `testing`, the default connection. The `models`, `database` and `queue` plugins need a separate read-only connection.'],
 ]);
 
 it('writes the warnings before it throws for an error', function () {

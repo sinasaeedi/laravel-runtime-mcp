@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SinaSaeedi\RuntimeMcp\Security\Boot\Rules;
 
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Support\Arr;
 use SinaSaeedi\RuntimeMcp\Plugins\Contracts\Plugin;
 use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
 use SinaSaeedi\RuntimeMcp\Security\Boot\BootIssue;
@@ -47,7 +48,8 @@ final class ReadOnlyConnection implements BootRule
         }
 
         $connection = $this->config->get('runtime-mcp.database.connection');
-        $need = 'The '.implode(' and ', $names).(count($names) === 1 ? ' plugin needs' : ' plugins need')
+        // "`models`, `database` and `queue`": the queue plugin made three names possible (01-23).
+        $need = 'The '.Arr::join($names, ', ', ' and ').(count($names) === 1 ? ' plugin needs' : ' plugins need')
             .' a separate read-only connection.';
 
         // Unset: null, '', blank, or not a string.

@@ -26,7 +26,8 @@ function queuesCheckResults(array $config = []): array
 
     $checks = app(QueuePlugin::class)->doctorChecks();
 
-    expect($checks)->toHaveCount(1)
+    // 01-23 adds the "Failed jobs" check after this one.
+    expect($checks)->toHaveCount(2)
         ->and($checks[0])->toBeInstanceOf(QueuesCheck::class)
         ->and($checks[0]->title())->toBe('Queues');
 

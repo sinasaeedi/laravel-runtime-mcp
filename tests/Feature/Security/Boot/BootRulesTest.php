@@ -162,7 +162,7 @@ it('fails database.connection when it is unset: an error in a strict environment
 
     expect(bootRulesFlat(bootRulesCheck(ReadOnlyConnection::class, ['runtime-mcp.database.connection' => $connection])))->toBe([[
         'database.connection', 'error',
-        'RUNTIME_MCP_DB_CONNECTION is not set. The `models` and `database` plugins need a separate read-only connection.',
+        'RUNTIME_MCP_DB_CONNECTION is not set. The `models`, `database` and `queue` plugins need a separate read-only connection.',
     ]]);
 })->with([
     'null' => [null],
@@ -196,7 +196,7 @@ it('fails database.connection when it names the default connection', function ()
 
     expect(bootRulesFlat(bootRulesCheck(ReadOnlyConnection::class, ['runtime-mcp.database.connection' => 'testing'])))->toBe([[
         'database.connection', 'error',
-        'RUNTIME_MCP_DB_CONNECTION names `testing`, the default connection. The `models` and `database` plugins need a separate read-only connection.',
+        'RUNTIME_MCP_DB_CONNECTION names `testing`, the default connection. The `models`, `database` and `queue` plugins need a separate read-only connection.',
     ]]);
 });
 
@@ -224,9 +224,12 @@ it('names only the active plugins that read the database', function (array $plug
 
     expect($issues[0]->message ?? null)->toBe($message);
 })->with([
-    'both off' => [['models' => false, 'database' => false], null],
-    'only database' => [['models' => false], 'RUNTIME_MCP_DB_CONNECTION is not set. The `database` plugin needs a separate read-only connection.'],
-    'only models' => [['database' => false], 'RUNTIME_MCP_DB_CONNECTION is not set. The `models` plugin needs a separate read-only connection.'],
+    'all three off' => [['models' => false, 'database' => false, 'queue' => false], null],
+    'only database' => [['models' => false, 'queue' => false], 'RUNTIME_MCP_DB_CONNECTION is not set. The `database` plugin needs a separate read-only connection.'],
+    'only models' => [['database' => false, 'queue' => false], 'RUNTIME_MCP_DB_CONNECTION is not set. The `models` plugin needs a separate read-only connection.'],
+    // 01-23: Testbench's queue.failed.driver is database-uuids, so the queue plugin reads a table.
+    'only queue' => [['models' => false, 'database' => false], 'RUNTIME_MCP_DB_CONNECTION is not set. The `queue` plugin needs a separate read-only connection.'],
+    'database and queue' => [['models' => false], 'RUNTIME_MCP_DB_CONNECTION is not set. The `database` and `queue` plugins need a separate read-only connection.'],
     'every plugin off' => [['core' => false, 'models' => false, 'database' => false, 'queue' => false, 'logs' => false], null],
 ]);
 

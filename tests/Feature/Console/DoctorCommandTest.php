@@ -22,10 +22,11 @@ use SinaSaeedi\RuntimeMcp\Tests\TestCase;
 
 /*
  * The test read-only connection (testing_readonly) is SQLite, so with the database or models plugin on,
- * the Read-only role check (01-13) fails. A test that counts lines or expects exit 0 turns both off; the
- * check then passes with "Not needed".
+ * the Read-only role check (01-13) fails. A test that counts lines or expects exit 0 turns both off, and
+ * puts the queue plugin's failed jobs in a file (01-23: with Testbench's database-uuids table it reads the
+ * database too); the check then passes with "Not needed".
  */
-const NO_DATABASE_PLUGINS = ['runtime-mcp.plugins.database' => false, 'runtime-mcp.plugins.models' => false];
+const NO_DATABASE_PLUGINS = ['runtime-mcp.plugins.database' => false, 'runtime-mcp.plugins.models' => false, 'queue.failed.driver' => 'file'];
 
 /*
  * Testbench's cache store is array, which the Limits check warns about in a strict environment (01-17
@@ -49,7 +50,7 @@ it('prints a healthy strict report: the header, a pass line per core check, exit
 
     expect($code)->toBe(0)
         ->and($output)->toContain("Runtime MCP doctor — Runtime Test (production), strict, package {$version}")
-        ->and(substr_count($output, '✓'))->toBe(18) // 17 core checks and the queue plugin's Queues (01-22)
+        ->and(substr_count($output, '✓'))->toBe(19) // 17 core checks and the queue plugin's Queues (01-22) and Failed jobs (01-23)
         ->and(str_contains($output, '✗'))->toBeFalse()
         ->and(str_contains($output, '→'))->toBeFalse()
         ->and($output)->toContain('✓ Endpoint')
