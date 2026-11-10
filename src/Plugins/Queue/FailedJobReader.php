@@ -38,6 +38,9 @@ use Throwable;
  * no pattern). Every "could not look" is a FailedJobsUnavailable with package text (rule 11); a database message
  * never reaches a note, because it can name a host or a user (DbSchema's rule).
  *
+ * find() (01-24, spec 6.7) reads one job whole for queue_failed_job_show: the payload (at most MAX_PAYLOAD_BYTES)
+ * reaches PHP there only to be masked by PayloadMask, and the exception up to RAW_EXCEPTION_CHARACTERS.
+ *
  * Built through the container on every request; the constructor reads nothing.
  */
 final class FailedJobReader
@@ -87,6 +90,29 @@ final class FailedJobReader
 
     /** Laravel's write() is a plain file_put_contents(), and read() takes no lock: a read can see an empty or changing file. */
     public const FILE_BUSY = 'The failed-job file was empty or changed while it was read; a worker may be writing it. Try again.';
+
+    /** 01-24: the largest payload find() reads, in bytes. A larger one stays in the database: its data is masked anyway. */
+    public const MAX_PAYLOAD_BYTES = 1_000_000;
+
+    /** 01-24: the most of an exception find() shows, in characters (a character cut never splits a UTF-8 sequence). */
+    public const EXCEPTION_CHARACTERS = 200_000;
+
+    /** 01-24: what SQL selects of the exception: room for a secret that starts before the cut (redact, then cut). */
+    public const RAW_EXCEPTION_CHARACTERS = 202_000;
+
+    /** 01-24, 01-21 Q4: an id that can match an integer key. MySQL reads '1abc' as 1 and '012' as 12; PostgreSQL fails 'abc'. */
+    public const INT_ID_PATTERN = '/^[1-9][0-9]{0,18}$/D';
+
+    public const PAYLOAD_NOT_SHOWN = 'The read-only role cannot read `%s.payload`, so the payload, job_class and attempts are not shown.';
+
+    public const PAYLOAD_TOO_LARGE = 'The payload is %s bytes; a payload over %s bytes is not read, so job_class and attempts are not shown.';
+
+    public const PAYLOAD_INVALID = 'The payload is not a JSON object in the format Laravel writes, so job_class and attempts are not shown.';
+
+    public const EXCEPTION_CUT = 'The exception text is %s characters; the first %s are shown.';
+
+    /** 01-24 triage: TIMED_OUT for one job by its id: nothing to narrow, so no advice (as 01-21's model_show note). */
+    public const LOOKUP_TIMED_OUT = 'Reading table `%s` was stopped by the %d ms statement timeout.';
 
     /** PostgreSQL: undefined table; MySQL and MariaDB (driver code): table does not exist. */
     private const MISSING_TABLE = ['42P01', 1146];
@@ -217,6 +243,81 @@ final class FailedJobReader
             'more_exception_classes' => count($byExceptionClass) > self::GROUPS,
             'payload_hidden' => $payloadHidden,
         ];
+    }
+
+    /**
+     * 01-24: one failed job by its id, for queue_failed_job_show: the metadata, the whole exception (redacted, then cut
+     * to EXCEPTION_CHARACTERS) and the payload with its data masked (PayloadMask). null = no failed job with this id.
+     *
+     * A table: one row by the source's ID column, in the session frame, with the payload only when it is at most
+     * MAX_PAYLOAD_BYTES. No JSON is parsed in SQL, so one invalid payload never makes the job unreadable. The file: the
+     * size check, then Laravel's own FileFailedJobProvider::all() and the id match of its find().
+     *
+     * @return array{job: array{id: string, job_class: string|null, queue: string|null, connection: string|null, attempts: int|null, failed_at: string|null, exception: string, payload: array<string, mixed>|string}, notes: list<string>, truncated: int|false}|null
+     *
+     * @throws FailedJobsUnavailable
+     */
+    public function find(FailedJobSource $source, string $id): ?array
+    {
+        if ($source->kind === FailedJobSource::FILE) {
+            $row = $this->fileJobById($source, $id);
+            $payloadHidden = false;
+        } else {
+            try {
+                [$rows, $payloadHidden] = $this->tableRow($source, $id);
+            } catch (FailedJobsUnavailable $e) {
+                $previous = $e->getPrevious();
+
+                // 01-21 Q4: an id that does not fit the ID column's type (a PostgreSQL `uuid` column) matches no job.
+                // find() parses no JSON in SQL, so this SQLSTATE comes from the id (01-24 triage).
+                if ($previous instanceof QueryFailed && $previous->sqlState === '22P02') {
+                    return null;
+                }
+
+                // One row by its id: 01-23's TIMED_OUT names from and to, which this tool does not take.
+                if ($previous instanceof QueryTimedOut) {
+                    throw new FailedJobsUnavailable(sprintf(self::LOOKUP_TIMED_OUT, (string) $source->table, $previous->timeoutMs), 0, $previous);
+                }
+
+                throw $e;
+            }
+
+            $row = $rows[0] ?? null;
+        }
+
+        return $row === null ? null : $this->shape($source, $id, $row, $payloadHidden);
+    }
+
+    /**
+     * find() for a table: one row by the source's ID column, in the session frame.
+     *
+     * @return array{list<array<string, mixed>>, bool} the rows and whether the payload was left out
+     *
+     * @throws FailedJobsUnavailable
+     */
+    private function tableRow(FailedJobSource $source, string $id): array
+    {
+        // 01-21 Q4 (Sina, 2026-11-05): an id that cannot match an integer key never reaches SQL (MySQL reads '1abc' as
+        // 1): the read selects no row. It still runs, so a table that cannot be read stays unavailable (01-21: "an
+        // unreadable table is unavailable, never empty"; DoD 3; 01-24 triage).
+        [$where, $bindings] = $source->idColumn === 'id' && ! self::isIntId($id) ? ['1 = 0', []] : [null, [$id]];
+
+        return $this->fromTable($source, false, function (Connection $ro, array $sql) use ($source, $where, $bindings): array {
+            $g = $ro->getQueryGrammar();
+            $p = $g->wrap('payload');
+            $e = $g->wrap('exception');
+            // PostgreSQL's length() counts characters, MySQL's LENGTH() bytes: each driver names its function.
+            [$bytes, $characters] = $ro->getDriverName() === 'pgsql' ? ['octet_length', 'char_length'] : ['LENGTH', 'CHAR_LENGTH'];
+            // The second read of fromTable() (no grant on payload) passes 'NULL' expressions: select no payload then.
+            $payload = $sql['job_class_full'] === 'NULL'
+                ? 'NULL as payload, NULL as payload_bytes'
+                : "CASE WHEN {$bytes}({$p}) <= ".self::MAX_PAYLOAD_BYTES." THEN {$p} END as payload, {$bytes}({$p}) as payload_bytes";
+
+            return self::select($ro, 'select '.implode(', ', array_map($g->wrap(...), ['connection', 'queue', 'failed_at']))
+                .", {$payload}, left({$e}, ".self::RAW_EXCEPTION_CHARACTERS.') as exception'
+                .", {$characters}({$e}) as exception_characters, {$bytes}({$e}) as exception_bytes"
+                .' from '.$g->wrapTable((string) $source->table).' where '.($where ?? $g->wrap((string) $source->idColumn).' = ?').' limit 1', $bindings);
+        });
     }
 
     /**
@@ -403,28 +504,10 @@ final class FailedJobReader
      */
     private function fileJobs(FailedJobSource $source): array
     {
-        $failer = $this->failer();
+        [$failer, $path] = $this->fileProvider($source);
 
-        if (! $failer instanceof FileFailedJobProvider) {
-            throw new FailedJobsUnavailable(self::REBOUND);
-        }
-
-        // Laravel's default when queue.failed.path is unset (QueueServiceProvider). Never shown: spec 4.3.
-        $path = $source->path ?? $this->app->storagePath('framework/cache/failed-jobs.json');
-        clearstatcache(true, $path);
-
-        if (! file_exists($path)) {
+        if ($path === null) {
             return []; // Laravel's read() gives [] too: nothing has failed yet.
-        }
-
-        $size = is_readable($path) ? filesize($path) : false;
-
-        if ($size === false) {
-            throw new FailedJobsUnavailable(self::FILE_UNREADABLE);
-        }
-
-        if ($size > self::MAX_FILE_BYTES) {
-            throw new FailedJobsUnavailable(sprintf(self::FILE_TOO_LARGE, $size, self::MAX_FILE_BYTES));
         }
 
         $all = $failer->all();
@@ -452,11 +535,119 @@ final class FailedJobReader
     }
 
     /**
-     * FileFailedJobProvider::all() gave []: true only for a JSON empty list. Read again, at most MAX_FILE_BYTES + 1.
+     * Laravel's file provider and the file's path, after the checks both readers need: the provider is Laravel's own,
+     * and the file is readable and at most MAX_FILE_BYTES. The path is null when there is no file (nothing has failed).
+     *
+     * @return array{FileFailedJobProvider, string|null}
      *
      * @throws FailedJobsUnavailable
      */
-    private static function confirmNoJobs(string $path): void
+    private function fileProvider(FailedJobSource $source): array
+    {
+        $failer = $this->failer();
+
+        if (! $failer instanceof FileFailedJobProvider) {
+            throw new FailedJobsUnavailable(self::REBOUND);
+        }
+
+        // Laravel's default when queue.failed.path is unset (QueueServiceProvider). Never shown: spec 4.3.
+        $path = $source->path ?? $this->app->storagePath('framework/cache/failed-jobs.json');
+        clearstatcache(true, $path);
+
+        if (! file_exists($path)) {
+            return [$failer, null];
+        }
+
+        $size = is_readable($path) ? filesize($path) : false;
+
+        if ($size === false) {
+            throw new FailedJobsUnavailable(self::FILE_UNREADABLE);
+        }
+
+        if ($size > self::MAX_FILE_BYTES) {
+            throw new FailedJobsUnavailable(sprintf(self::FILE_TOO_LARGE, $size, self::MAX_FILE_BYTES));
+        }
+
+        return [$failer, $path];
+    }
+
+    /**
+     * 01-24: one entry of the file by its id, as find() needs it, or null when the file really does not hold it.
+     *
+     * @return array<string, mixed>|null
+     *
+     * @throws FailedJobsUnavailable
+     */
+    private function fileJobById(FailedJobSource $source, string $id): ?array
+    {
+        [$failer, $path] = $this->fileProvider($source);
+
+        if ($path === null) {
+            return null;
+        }
+
+        $all = $failer->all();
+
+        if ($all === []) {
+            // all() is read(): [] also for a blank file and for content that is not a JSON list.
+            self::confirmNoJobs($path, $id);
+
+            return null;
+        }
+
+        $job = null;
+
+        // Laravel's find() reads $job->id of every entry: an entry that is not an object, or has no id, is a PHP
+        // warning there (an ErrorException). Check every entry first, as the list does (FILE_FORMAT; 01-24 triage).
+        foreach ($all as $entry) {
+            $checked = self::checkedEntry($entry);
+
+            if ($checked === null) {
+                throw new FailedJobsUnavailable(self::FILE_FORMAT);
+            }
+
+            $job ??= get_object_vars($checked)['id'] === $id ? $checked : null;
+        }
+
+        if ($job === null) {
+            return null;
+        }
+
+        // The same strings and time rules as the list (FILE_FORMAT otherwise); then the two whole texts.
+        $entry = self::fileJob($job);
+        $fields = get_object_vars($job);
+        $payload = is_string($fields['payload'] ?? null) ? $fields['payload'] : '';
+        $exception = is_string($fields['exception'] ?? null) ? $fields['exception'] : '';
+        $small = strlen($payload) <= self::MAX_PAYLOAD_BYTES;
+
+        return [
+            'connection' => $entry['connection'],
+            'queue' => $entry['queue'],
+            'failed_at' => $entry['failed_at'],
+            'payload' => $small ? $payload : null,
+            'payload_bytes' => strlen($payload),
+            'exception' => mb_substr($exception, 0, self::RAW_EXCEPTION_CHARACTERS),
+            'exception_characters' => mb_strlen($exception),
+            'exception_bytes' => strlen($exception),
+        ];
+    }
+
+    /**
+     * A file entry when it is an object with a string id, else null. mixed, as fileJob(): the file holds any JSON, and
+     * the PHPDoc of all() differs between Laravel versions (13.36: array; later: a list of objects).
+     */
+    private static function checkedEntry(mixed $entry): ?object
+    {
+        return is_object($entry) && is_string(get_object_vars($entry)['id'] ?? null) ? $entry : null;
+    }
+
+    /**
+     * Laravel's read() gave nothing: all() gave [] ($id null), or find($id) gave null. True only for a JSON list with
+     * no job ($id null) or without that job. Read again, at most MAX_FILE_BYTES + 1.
+     *
+     * @throws FailedJobsUnavailable
+     */
+    private static function confirmNoJobs(string $path, ?string $id = null): void
     {
         clearstatcache(true, $path);
 
@@ -472,12 +663,120 @@ final class FailedJobReader
 
         $decoded = json_decode($content);
 
-        if ($decoded === []) {
-            return;
+        if (is_array($decoded)) {
+            $ids = array_map(fn (mixed $job): mixed => is_object($job) ? ($job->id ?? null) : null, $decoded);
+
+            // A list now with jobs (or with this job): a worker wrote it between the two reads, so try again.
+            if ($id === null ? $decoded === [] : ! in_array($id, $ids, true)) {
+                return;
+            }
+
+            throw new FailedJobsUnavailable(self::FILE_BUSY);
         }
 
-        // Blank, or a list now (a worker wrote it between the two reads): try again. Anything else: not Laravel's format.
-        throw new FailedJobsUnavailable(trim($content) === '' || is_array($decoded) ? self::FILE_BUSY : self::FILE_FORMAT);
+        // Blank: a worker truncated the file to write it. Anything else: not Laravel's format.
+        throw new FailedJobsUnavailable(trim($content) === '' ? self::FILE_BUSY : self::FILE_FORMAT);
+    }
+
+    /**
+     * 01-24: a row of find() as queue_failed_job_show returns it. The payload is decoded only here, in PHP, never in SQL.
+     *
+     * @param  array<string, mixed>  $row  connection, queue, failed_at, payload (null when not read), payload_bytes,
+     *                                     exception (at most RAW_EXCEPTION_CHARACTERS), exception_characters, exception_bytes
+     * @return array{job: array{id: string, job_class: string|null, queue: string|null, connection: string|null, attempts: int|null, failed_at: string|null, exception: string, payload: array<string, mixed>|string}, notes: list<string>, truncated: int|false}
+     */
+    private function shape(FailedJobSource $source, string $id, array $row, bool $payloadHidden): array
+    {
+        $notes = [];
+        $payload = self::text($row['payload'] ?? null);
+        $decoded = null;
+
+        if ($payloadHidden) {
+            $notes[] = sprintf(self::PAYLOAD_NOT_SHOWN, (string) $source->table);
+        } elseif ($payload === null && $row['payload_bytes'] !== null) {
+            $notes[] = sprintf(self::PAYLOAD_TOO_LARGE, number_format(self::count($row['payload_bytes'])), number_format(self::MAX_PAYLOAD_BYTES));
+        } elseif ($payload === null || ($decoded = PayloadMask::decode($payload)) === null) {
+            $notes[] = self::PAYLOAD_INVALID;
+        }
+
+        $connection = self::text($row['connection'] ?? null);
+        $class = $decoded['displayName'] ?? null;
+
+        // Redacted whole, then cut (RunTool::cut()'s rule): a secret across the cut is redacted, never half shown.
+        $raw = self::text($row['exception'] ?? null) ?? '';
+        $exception = $this->app->make(Redactor::class)->redactString($raw);
+        $characters = self::count($row['exception_characters'] ?? null);
+        $truncated = false;
+
+        if ($characters > self::EXCEPTION_CHARACTERS) {
+            // The characters read past EXCEPTION_CHARACTERS are context for redaction, never shown. They end the
+            // redacted text where redaction left them alone, also when it made the text before them shorter: drop
+            // them, so a secret that the read cut short is never shown in part (01-24 triage).
+            $keep = mb_strlen($exception) - self::untouchedTail($raw, $exception, mb_strlen($raw) - self::EXCEPTION_CHARACTERS);
+            $exception = mb_substr($exception, 0, min(self::EXCEPTION_CHARACTERS, $keep));
+            // Spec 4.4: truncated counts bytes. The stored bytes after the shown characters.
+            $truncated = max(1, self::count($row['exception_bytes'] ?? null) - strlen(mb_substr($raw, 0, self::EXCEPTION_CHARACTERS)));
+            $notes[] = sprintf(self::EXCEPTION_CUT, number_format($characters), number_format(self::EXCEPTION_CHARACTERS));
+        }
+
+        return [
+            'job' => [
+                'id' => $id,
+                'job_class' => is_string($class) ? mb_substr($class, 0, self::NAME_CHARACTERS) : null,
+                'queue' => self::text($row['queue'] ?? null),
+                'connection' => $connection,
+                'attempts' => $decoded === null ? null : $this->attempts($decoded, $connection),
+                'failed_at' => self::iso($row['failed_at'] ?? null),
+                'exception' => $exception,
+                'payload' => $decoded === null ? Redactor::PAYLOAD : PayloadMask::mask($decoded),
+            ],
+            'notes' => $notes,
+            'truncated' => $truncated,
+        ];
+    }
+
+    /**
+     * The tries Laravel counted, or null. Only a Redis queue keeps them in the job: its failed payload is the body from
+     * before the last try (the Lua pop() script adds 1 to the reserved copy only), so Laravel's RedisJob::attempts()
+     * adds 1, and so does this. Config only: the failed job's connection must still be a redis connection.
+     *
+     * @param  array<array-key, mixed>  $payload
+     */
+    private function attempts(array $payload, ?string $connection): ?int
+    {
+        $connections = $this->config->get('queue.connections');
+        // Never a dot path: a connection name may hold a dot.
+        $settings = $connection !== null && is_array($connections) ? ($connections[$connection] ?? null) : null;
+        $stored = $payload['attempts'] ?? null;
+
+        return is_array($settings) && ($settings['driver'] ?? null) === 'redis' && is_int($stored) && $stored >= 0 ? $stored + 1 : null;
+    }
+
+    /**
+     * How many of the last $max characters of $raw end $redacted unchanged: all $max when redaction did not touch
+     * them, else the characters after the last marker in them.
+     */
+    private static function untouchedTail(string $raw, string $redacted, int $max): int
+    {
+        if ($max <= 0) {
+            return 0;
+        }
+
+        $a = mb_str_split(mb_substr($raw, -$max));
+        $b = mb_str_split(mb_substr($redacted, -$max));
+        $same = 0;
+
+        while ($same < count($a) && $same < count($b) && $a[count($a) - 1 - $same] === $b[count($b) - 1 - $same]) {
+            $same++;
+        }
+
+        return $same;
+    }
+
+    /** 01-21 Q4: a decimal of at most PHP_INT_MAX, written as an integer key is (no sign, no leading zero). */
+    private static function isIntId(string $id): bool
+    {
+        return preg_match(self::INT_ID_PATTERN, $id) === 1 && filter_var($id, FILTER_VALIDATE_INT) !== false;
     }
 
     /** The app's failed-job provider: mixed, because an app can bind its own (queue.failer is the interface's alias). */

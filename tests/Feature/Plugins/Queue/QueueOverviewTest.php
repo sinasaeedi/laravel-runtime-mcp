@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Queue as QueueFacade;
 use SinaSaeedi\RuntimeMcp\Mcp\EnvelopeSchema;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\QueuePlugin;
+use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueFailedJobShow;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueFailedJobsList;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueFailedJobsSummary;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueOverview;
@@ -317,7 +318,7 @@ it('QO13 keeps the tool contract, is registered by the queue plugin, and is list
     assertToolContract(app(QueueOverview::class), app(QueuePlugin::class));
 
     // Built for tools/list on every request: a names value it cannot read does not break the list.
-    expect(app(QueuePlugin::class)->tools())->toBe([QueueOverview::class, QueueFailedJobsList::class, QueueFailedJobsSummary::class])
+    expect(app(QueuePlugin::class)->tools())->toBe([QueueOverview::class, QueueFailedJobsList::class, QueueFailedJobsSummary::class, QueueFailedJobShow::class])
         ->and(currentTest()->mcpPost('tools/list')->assertOk()->json('result.tools.*.name'))->toContain('queue_overview')
         ->and(app(QueueOverview::class)->description())->toContain('never as zero');
 });
