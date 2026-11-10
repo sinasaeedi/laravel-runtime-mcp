@@ -600,13 +600,13 @@ final class FailedJobReader
         // Laravel's find() reads $job->id of every entry: an entry that is not an object, or has no id, is a PHP
         // warning there (an ErrorException). Check every entry first, as the list does (FILE_FORMAT; 01-24 triage).
         foreach ($all as $entry) {
-            $entryId = is_object($entry) ? (get_object_vars($entry)['id'] ?? null) : null;
+            $checked = self::checkedEntry($entry);
 
-            if (! is_string($entryId)) {
+            if ($checked === null) {
                 throw new FailedJobsUnavailable(self::FILE_FORMAT);
             }
 
-            $job ??= $entryId === $id ? $entry : null;
+            $job ??= get_object_vars($checked)['id'] === $id ? $checked : null;
         }
 
         if ($job === null) {
@@ -630,6 +630,15 @@ final class FailedJobReader
             'exception_characters' => mb_strlen($exception),
             'exception_bytes' => strlen($exception),
         ];
+    }
+
+    /**
+     * A file entry when it is an object with a string id, else null. mixed, as fileJob(): the file holds any JSON, and
+     * the PHPDoc of all() differs between Laravel versions (13.36: array; later: a list of objects).
+     */
+    private static function checkedEntry(mixed $entry): ?object
+    {
+        return is_object($entry) && is_string(get_object_vars($entry)['id'] ?? null) ? $entry : null;
     }
 
     /**
