@@ -8,6 +8,7 @@ use Illuminate\Contracts\Config\Repository;
 use SinaSaeedi\RuntimeMcp\Plugins\AbstractPlugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Doctor\FailedJobsCheck;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Doctor\QueuesCheck;
+use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueFailedJobShow;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueFailedJobsList;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueFailedJobsSummary;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueOverview;
@@ -49,7 +50,7 @@ final class QueuePlugin extends AbstractPlugin
 
     public function tools(): array
     {
-        return [QueueOverview::class, QueueFailedJobsList::class, QueueFailedJobsSummary::class];
+        return [QueueOverview::class, QueueFailedJobsList::class, QueueFailedJobsSummary::class, QueueFailedJobShow::class];
     }
 
     public function doctorChecks(): array
