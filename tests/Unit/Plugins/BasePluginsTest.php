@@ -13,6 +13,7 @@ use SinaSaeedi\RuntimeMcp\Plugins\Models\ModelsPlugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Models\Tools\ModelShow;
 use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\QueuePlugin;
+use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueFailedJobShow;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueFailedJobsList;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueFailedJobsSummary;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueOverview;
@@ -23,7 +24,7 @@ dataset('base plugins', [
     'models' => [ModelsPlugin::class, 'models', 'model_', true, [ModelShow::class]],
     'database' => [DatabasePlugin::class, 'database', 'db_', true, [DbSchema::class, DbQuery::class]],
     // 01-23: Testbench's queue.failed.driver is database-uuids, so the queue plugin reads a table.
-    'queue' => [QueuePlugin::class, 'queue', 'queue_', true, [QueueOverview::class, QueueFailedJobsList::class, QueueFailedJobsSummary::class]],
+    'queue' => [QueuePlugin::class, 'queue', 'queue_', true, [QueueOverview::class, QueueFailedJobsList::class, QueueFailedJobsSummary::class, QueueFailedJobShow::class]],
     'logs' => [LogsPlugin::class, 'logs', 'logs_', false, []],
 ]);
 

@@ -8,6 +8,7 @@ use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Queue\Failed\FailedJobProviderInterface;
+use Illuminate\Queue\SyncQueue;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Throwable;
@@ -21,7 +22,13 @@ final class FailedJobs
 {
     public const CUSTOMER_EMAIL = 'ada.customer@example.com';
 
+    /** 01-24: the second piece of customer data in SendInvoiceJob. */
+    public const CUSTOMER_ADDRESS = '12 Acacia Avenue, Leeds';
+
+    /** The tools of 01-23, which take no required input. queue_failed_job_show needs an id: allow it with Gates::allow(SHOW). */
     public const TOOLS = ['queue_failed_jobs_list', 'queue_failed_jobs_summary'];
+
+    public const SHOW = 'queue_failed_job_show';
 
     /**
      * 01-11's read-only role on $privileged (testing_pgsql or testing_mysql), its fixture failed_jobs table emptied,
@@ -68,6 +75,33 @@ final class FailedJobs
             'data' => ['commandName' => $class, 'command' => $command],
             'attempts' => 3,
         ], JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * 01-24: the payload that Laravel itself writes for $job (Queue::createPayload(), protected, so a SyncQueue
+     * subclass opens it), so it has every key of the installed Laravel version. With $redisAttempts, the two keys that
+     * RedisQueue::createPayloadArray() adds: id, and attempts as the failed body holds it (one less than the tries).
+     */
+    public static function realPayload(object $job, ?int $redisAttempts = null): string
+    {
+        $queue = new class extends SyncQueue
+        {
+            public function payloadOf(object $job): string
+            {
+                return $this->createPayload($job, 'default');
+            }
+        };
+        $queue->setContainer(app());
+        $queue->setConnectionName('sync');
+        $payload = $queue->payloadOf($job);
+
+        if ($redisAttempts === null) {
+            return $payload;
+        }
+
+        $decoded = (array) json_decode($payload, true, 512, JSON_THROW_ON_ERROR);
+
+        return (string) json_encode([...$decoded, 'id' => Str::random(32), 'attempts' => $redisAttempts], JSON_THROW_ON_ERROR);
     }
 
     /**
