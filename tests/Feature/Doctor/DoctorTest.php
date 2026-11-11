@@ -44,6 +44,7 @@ it('runs the core checks in the order of Doctor::CHECKS', function () {
         'Models', // the models plugin's check (01-21), after the core checks
         'Queues', // the queue plugin's check (01-22)
         'Failed jobs', // the queue plugin's second check (01-23)
+        'Logs', // the logs plugin's check (01-25)
     ])
         ->and(count(Doctor::CHECKS))->toBe(17);
 });
@@ -80,8 +81,8 @@ it('turns a check that throws into one Fail line with the class only, and runs t
 });
 
 it('names a check that cannot be built by its class', function () {
-    // The models plugin is off: its own check (01-21) would add a line.
-    currentTest()->bootWith(['runtime-mcp.plugins.models' => false, 'runtime-mcp.plugins.queue' => false], 'production');
+    // The models, queue and logs plugins are off: their own checks (01-21 to 01-25) would add lines.
+    currentTest()->bootWith(['runtime-mcp.plugins.models' => false, 'runtime-mcp.plugins.queue' => false, 'runtime-mcp.plugins.logs' => false], 'production');
 
     $lines = (new Doctor(app(), app(PluginRegistry::class), app(Environment::class), [UnbuildableCheck::class]))->run()->lines;
 

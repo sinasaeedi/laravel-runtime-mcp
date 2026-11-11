@@ -9,6 +9,7 @@ use SinaSaeedi\RuntimeMcp\Plugins\Database\DatabasePlugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Database\Tools\DbQuery;
 use SinaSaeedi\RuntimeMcp\Plugins\Database\Tools\DbSchema;
 use SinaSaeedi\RuntimeMcp\Plugins\Logs\LogsPlugin;
+use SinaSaeedi\RuntimeMcp\Plugins\Logs\Tools\LogsSearch;
 use SinaSaeedi\RuntimeMcp\Plugins\Models\ModelsPlugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Models\Tools\ModelShow;
 use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
@@ -25,7 +26,7 @@ dataset('base plugins', [
     'database' => [DatabasePlugin::class, 'database', 'db_', true, [DbSchema::class, DbQuery::class]],
     // 01-23: Testbench's queue.failed.driver is database-uuids, so the queue plugin reads a table.
     'queue' => [QueuePlugin::class, 'queue', 'queue_', true, [QueueOverview::class, QueueFailedJobsList::class, QueueFailedJobsSummary::class, QueueFailedJobShow::class]],
-    'logs' => [LogsPlugin::class, 'logs', 'logs_', false, []],
+    'logs' => [LogsPlugin::class, 'logs', 'logs_', false, [LogsSearch::class]],
 ]);
 
 it('knows the five base plugins, in this order', function () {
