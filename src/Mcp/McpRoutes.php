@@ -19,6 +19,14 @@ final class McpRoutes
     /** The STDIO handle: php artisan mcp:start runtime-mcp. */
     public const LOCAL_HANDLE = 'runtime-mcp';
 
+    /**
+     * laravel/mcp 1.2.0+ puts this on every Mcp::web() route. It allows only localhost, app.url and
+     * mcp.allowed_origins, so it refuses an origin that runtime-mcp.allowed_origins allows (and
+     * always refuses "null"). EnsureAllowedHostAndOrigin owns the Origin check (spec 5.4), so the
+     * route drops it. A string, not ::class: the class does not exist in laravel/mcp 1.1.
+     */
+    public const LARAVEL_VALIDATE_ORIGIN = 'Laravel\Mcp\Server\Middleware\ValidateOrigin';
+
     public function __construct(private readonly Repository $config) {}
 
     /**
@@ -72,11 +80,12 @@ final class McpRoutes
             return;
         }
 
-        Route::middleware($middleware)->group(function () use ($path): void {
-            Mcp::web($path, McpServer::class)
-                ->name(self::ROUTE_NAME)
-                ->withoutMiddleware(AddWwwAuthenticateHeader::class);
-        });
+        // The exclusions sit on the group, so they also reach the GET and DELETE routes of Mcp::web().
+        Route::middleware($middleware)
+            ->withoutMiddleware([AddWwwAuthenticateHeader::class, self::LARAVEL_VALIDATE_ORIGIN])
+            ->group(function () use ($path): void {
+                Mcp::web($path, McpServer::class)->name(self::ROUTE_NAME);
+            });
     }
 
     /** @return list<string>|null */

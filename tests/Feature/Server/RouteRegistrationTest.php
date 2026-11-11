@@ -8,6 +8,7 @@ use Laravel\Mcp\Facades\Mcp;
 use Laravel\Mcp\Server\Middleware\ReorderJsonAccept;
 use Laravel\Mcp\Server\Middleware\ValidateMcpHeaders;
 use SinaSaeedi\RuntimeMcp\Mcp\Http\EnsureEndpointEnabled;
+use SinaSaeedi\RuntimeMcp\Mcp\McpRoutes;
 use SinaSaeedi\RuntimeMcp\Mcp\McpServer;
 use SinaSaeedi\RuntimeMcp\Security\Auth\AuthenticateRequest;
 use SinaSaeedi\RuntimeMcp\Security\Http\EnsureAllowedHostAndOrigin;
@@ -105,3 +106,22 @@ it('sends no laravel/mcp WWW-Authenticate header, also when the app uses Mcp::oa
 
     currentTest()->mcpPost('initialize')->assertUnauthorized()->assertHeaderMissing('WWW-Authenticate');
 });
+
+// laravel/mcp 1.2.0 adds ValidateOrigin to every Mcp::web() route; it would refuse these origins.
+it('lets an Origin that runtime-mcp allows reach every route, not only POST', function (string $origin) {
+    currentTest()->bootWith(['runtime-mcp.enabled' => true, 'runtime-mcp.allowed_origins' => [$origin]]);
+    $headers = ['Authorization' => 'Bearer '.TestCase::TEST_KEY, 'Origin' => $origin];
+
+    currentTest()->mcpPost('initialize', headers: ['Origin' => $origin])->assertOk();
+    currentTest()->get('/mcp', $headers)->assertStatus(405)->assertHeader('Allow', 'POST');
+    currentTest()->delete('/mcp', [], $headers)->assertStatus(405)->assertHeader('Allow', 'POST');
+
+    foreach (Route::getRoutes()->getRoutes() as $route) {
+        if ($route->uri() === 'mcp') {
+            expect(app('router')->gatherRouteMiddleware($route))->not->toContain(McpRoutes::LARAVEL_VALIDATE_ORIGIN);
+        }
+    }
+})->with([
+    'not app.url' => ['https://console.example.com'],
+    'null' => ['null'],
+]);
