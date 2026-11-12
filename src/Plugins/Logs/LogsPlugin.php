@@ -7,6 +7,7 @@ namespace SinaSaeedi\RuntimeMcp\Plugins\Logs;
 use Illuminate\Contracts\Config\Repository;
 use SinaSaeedi\RuntimeMcp\Plugins\AbstractPlugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Logs\Doctor\LogsCheck;
+use SinaSaeedi\RuntimeMcp\Plugins\Logs\Tools\LogsRecentErrors;
 use SinaSaeedi\RuntimeMcp\Plugins\Logs\Tools\LogsSearch;
 
 /** Base plugin (spec 4.2): no package needed, on by default. Tools: logs_search, logs_recent_errors (01-25, 01-26). */
@@ -41,7 +42,7 @@ final class LogsPlugin extends AbstractPlugin
 
     public function tools(): array
     {
-        return [LogsSearch::class];
+        return [LogsSearch::class, LogsRecentErrors::class];
     }
 
     public function doctorChecks(): array

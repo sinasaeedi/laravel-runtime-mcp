@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Carbon\CarbonImmutable;
 use SinaSaeedi\RuntimeMcp\Mcp\EnvelopeSchema;
 use SinaSaeedi\RuntimeMcp\Plugins\Logs\LogsPlugin;
+use SinaSaeedi\RuntimeMcp\Plugins\Logs\Tools\LogsRecentErrors;
 use SinaSaeedi\RuntimeMcp\Plugins\Logs\Tools\LogsSearch;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\FailedJobWindow;
 use SinaSaeedi\RuntimeMcp\Tests\Support\AuditLog;
@@ -456,7 +457,7 @@ it('LS21 keeps the tool contract, also with no valid channel', function (mixed $
 it('LS22 hides the tool without a Gate, and the plugin registers it', function () {
     currentTest()->bootWith(LogFiles::config());
 
-    expect(app(LogsPlugin::class)->tools())->toBe([LogsSearch::class])
+    expect(app(LogsPlugin::class)->tools())->toBe([LogsSearch::class, LogsRecentErrors::class])
         ->and(FixtureTools::result(currentTest()->mcpPost('tools/list')->assertOk())['tools'] ?? [])
         ->not->toContain(LogFiles::TOOL);
 });
