@@ -38,4 +38,22 @@ final class McpToolAdapters
 
         return $adapters;
     }
+
+    /**
+     * The registered tools by name, hidden ones too: PromptGate and PromptContext look a prompt's tool up
+     * here (01-36). A name that is not a key is not registered.
+     *
+     * @param  list<McpToolAdapter>  $adapters
+     * @return array<string, RuntimeTool>
+     */
+    public static function byName(array $adapters): array
+    {
+        $tools = [];
+
+        foreach ($adapters as $adapter) {
+            $tools[$adapter->name()] = $adapter->runtimeTool();
+        }
+
+        return $tools;
+    }
 }
