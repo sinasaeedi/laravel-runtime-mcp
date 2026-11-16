@@ -9,7 +9,8 @@ use SinaSaeedi\RuntimeMcp\Tools\Contracts\RuntimeTool;
 
 /**
  * One tool call on its way through the guard pipeline. One object per call, never shared or kept
- * (rule 14). Stage 1 sets the principal; the audit stage (outermost) reads it on the way out.
+ * (rule 14). Stage 1 sets the principal; the audit stage (outermost) reads it on the way out. RunTool hands
+ * `progress` to the tool's ToolInput (01-37): a FiberProgress when the client sent a progressToken.
  */
 final class ToolCall
 {
@@ -25,6 +26,7 @@ final class ToolCall
         public readonly array $arguments,
         public readonly ?array $client,
         public readonly int $startedAt,
+        public readonly Progress $progress = new NullProgress,
     ) {}
 
     public function setPrincipal(Principal $principal): void
