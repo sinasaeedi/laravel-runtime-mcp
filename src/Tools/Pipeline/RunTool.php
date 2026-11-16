@@ -60,7 +60,7 @@ final class RunTool
         }
 
         try {
-            $result = $call->tool->execute(new ToolInput($validated));
+            $result = $call->tool->execute(new ToolInput($validated, $call->progress));
 
             // Inside the read-only transaction: redaction (stage 7) runs after the rollback (6).
             return ToolOutcome::success($result->withContent(self::plain($result->data), $result->note));
