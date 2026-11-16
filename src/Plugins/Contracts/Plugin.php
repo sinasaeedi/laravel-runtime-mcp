@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SinaSaeedi\RuntimeMcp\Plugins\Contracts;
 
 use SinaSaeedi\RuntimeMcp\Doctor\Check;
+use SinaSaeedi\RuntimeMcp\Prompts\Contracts\RuntimePrompt;
 use SinaSaeedi\RuntimeMcp\Security\Boot\BootRule;
 
 /**
@@ -42,6 +43,6 @@ interface Plugin
     /** @return list<Check> extra doctor checks; they run only while the plugin is active (01-12) */
     public function doctorChecks(): array;
 
-    /** @return list<class-string> the prompt classes this plugin registers (spec 5.14; 01-36 types them) */
+    /** @return list<class-string<RuntimePrompt>> the prompt classes this plugin registers (spec 5.14, 01-36) */
     public function prompts(): array;
 }
