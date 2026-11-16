@@ -53,6 +53,9 @@ final class LogsRecentErrors extends RuntimeTool
     /** %1$s since, %2$s the files. */
     public const NO_ERRORS = 'No error-level entries since %1$s in %2$s.';
 
+    /** 01-37, spec 6.10: the progress message after each file, as LogsSearch::PROGRESS. */
+    public const PROGRESS = 'Grouped %1$d of %2$d files (%3$s).';
+
     public function __construct(
         private readonly Repository $config,
         private readonly Application $app,
@@ -143,6 +146,7 @@ final class LogsRecentErrors extends RuntimeTool
                 return null;
             },
             PHP_INT_MAX,
+            LogsSearch::progress($input, self::PROGRESS),
         );
 
         if ($scan->files === []) {
