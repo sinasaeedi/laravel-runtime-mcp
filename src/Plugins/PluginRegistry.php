@@ -129,4 +129,18 @@ final class PluginRegistry
 
         return $tools;
     }
+
+    /** @return list<class-string> the prompts of the active plugins, in registry order (spec 5.14: a plugin that is off takes its prompts away) */
+    public function prompts(): array
+    {
+        $prompts = [];
+
+        foreach ($this->active() as $plugin) {
+            foreach ($plugin->prompts() as $prompt) {
+                $prompts[] = $prompt;
+            }
+        }
+
+        return $prompts;
+    }
 }

@@ -54,6 +54,28 @@ final class RuntimeServer
         return $this->plugins->tools();
     }
 
+    /**
+     * The prompts of the active plugins, in registry order, then runtime-mcp.prompts (spec 5.14). A value
+     * that is not a list gives no custom prompt; the prompts.class boot rule has failed for it already.
+     *
+     * @return list<string> class names; McpPromptAdapters refuses any that is not a RuntimePrompt
+     */
+    public function prompts(): array
+    {
+        $custom = $this->config->get('runtime-mcp.prompts');
+        $prompts = $this->plugins->prompts();
+
+        if (is_array($custom) && array_is_list($custom)) {
+            foreach ($custom as $class) {
+                if (is_string($class)) {
+                    $prompts[] = $class;
+                }
+            }
+        }
+
+        return $prompts;
+    }
+
     /** config('app.name') when it is a non-empty string, else 'Laravel'. app_info uses it too (01-18). */
     public function appName(): string
     {

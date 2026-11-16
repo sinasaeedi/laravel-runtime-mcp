@@ -19,6 +19,10 @@ use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ApiKeysPresent;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\AuthDriver;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\EnvironmentName;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\PluginsInstalled;
+use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\PromptClasses;
+use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\PromptNames;
+use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\PromptsUnique;
+use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\PromptTools;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ReadOnlyConnection;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\SanctumInstalled;
 use Throwable;
@@ -45,6 +49,10 @@ final class BootValidator
         ReadOnlyConnection::class,
         PluginsInstalled::class,
         EnvironmentName::class,
+        PromptClasses::class, // 01-36
+        PromptNames::class,
+        PromptsUnique::class,
+        PromptTools::class,
     ];
 
     /** @param  list<class-string<BootRule>>  $rules */

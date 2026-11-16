@@ -184,3 +184,14 @@ it('SC7 names a file with no header, and a missing one, in the order it met them
         // a.log is read to its start while the scan takes the first entry of each source, so its reason comes first.
         ->and($skipped)->toBe(["File a.log has no entry in Laravel's line format or the JSON format.", 'File b.log does not exist.']);
 });
+
+it('SC8 clears a symlink whose target is already gone, so the next test starts clean', function () {
+    // The filesystem's order decides whether SC5's a.log or link.log goes first (01-36 CI, one job of 23).
+    LogFiles::write('a.log', [LogFiles::line('2026-10-02 09:00:00', 'info', 'target')]);
+    symlink(LogFiles::path('a.log'), LogFiles::path('link.log'));
+    unlink(LogFiles::path('a.log'));
+
+    LogFiles::clear();
+
+    expect(is_dir(LogFiles::dir()))->toBeFalse();
+});

@@ -8,6 +8,7 @@ use Illuminate\Contracts\Config\Repository;
 use SinaSaeedi\RuntimeMcp\Plugins\AbstractPlugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Doctor\FailedJobsCheck;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Doctor\QueuesCheck;
+use SinaSaeedi\RuntimeMcp\Plugins\Queue\Prompts\InvestigateFailedJobs;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueFailedJobShow;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueFailedJobsList;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueFailedJobsSummary;
@@ -56,5 +57,11 @@ final class QueuePlugin extends AbstractPlugin
     public function doctorChecks(): array
     {
         return [new QueuesCheck(new WatchedQueues($this->config)), new FailedJobsCheck($this->config)];
+    }
+
+    /** Spec 6.11 (01-36). */
+    public function prompts(): array
+    {
+        return [InvestigateFailedJobs::class];
     }
 }

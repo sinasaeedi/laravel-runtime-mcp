@@ -126,6 +126,15 @@ final class LogFiles
 
         foreach ($items as $item) {
             assert($item instanceof \SplFileInfo);
+
+            // A symlink (SC5) goes as a link: chmod() and isDir() follow it, and its target can be gone already,
+            // because the order is the filesystem's (01-36 CI: "chmod(): No such file or directory").
+            if ($item->isLink()) {
+                unlink($item->getPathname());
+
+                continue;
+            }
+
             chmod($item->getPathname(), 0755);
             $item->isDir() ? rmdir($item->getPathname()) : unlink($item->getPathname());
         }

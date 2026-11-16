@@ -18,6 +18,8 @@ final readonly class AuditEntry
 
     public const KIND_REQUEST_REJECTED = 'request_rejected';
 
+    public const KIND_PROMPT_GET = 'prompt_get';
+
     public const DECISION_ALLOWED = 'allowed';
 
     public const DECISION_DENIED = 'denied';
@@ -28,6 +30,9 @@ final readonly class AuditEntry
 
     /** The longest tool name and details string kept, in characters. */
     public const MAX_TEXT = 255;
+
+    /** The longest prompt name kept in details.prompt: the longest valid name (01-36). */
+    public const MAX_PROMPT = 64;
 
     /**
      * @param  array<array-key, mixed>  $params
@@ -100,6 +105,59 @@ final readonly class AuditEntry
             durationMs: $durationMs,
             rowCount: $rowCount,
             outputBytes: $outputBytes,
+            details: self::cutDetails($details),
+        );
+    }
+
+    /**
+     * One prompts/get (01-36, spec 5.7): `tool` is null, the prompt name is details.prompt (cut to 64), and
+     * details.tool names the first tool that was denied or not registered. Decision and outcome follow
+     * toolCall(); a prompt returns no rows and no envelope, so row_count and output_bytes are null.
+     *
+     * @param  array<array-key, mixed>  $params  the raw arguments; AuditLogger redacts them
+     * @param  array{name: string, version: ?string}|null  $client  from ClientInfo::from()
+     */
+    public static function promptGet(
+        string $environment,
+        string $prompt,
+        array $params,
+        bool $allowed,
+        ?Reason $reason = null,
+        bool $failed = false,
+        ?string $errorClass = null,
+        ?int $durationMs = null,
+        ?string $principal = null,
+        int|string|null $userId = null,
+        ?string $authMethod = null,
+        ?string $ip = null,
+        ?array $client = null,
+        ?string $tool = null,
+    ): self {
+        $outcome = $allowed ? ($failed ? self::OUTCOME_ERROR : self::OUTCOME_SUCCESS) : null;
+        $details = ['prompt' => mb_substr($prompt, 0, self::MAX_PROMPT)];
+
+        if ($tool !== null) {
+            $details['tool'] = $tool;
+        }
+
+        return new self(
+            kind: self::KIND_PROMPT_GET,
+            timestamp: self::now(),
+            environment: $environment,
+            principal: $principal,
+            userId: $userId,
+            authMethod: $authMethod,
+            ip: $ip,
+            client: $client,
+            tool: null,
+            params: $params,
+            decision: $allowed ? self::DECISION_ALLOWED : self::DECISION_DENIED,
+            reason: $allowed ? null : $reason?->value,
+            outcome: $outcome,
+            errorClass: $outcome === self::OUTCOME_ERROR ? $errorClass : null,
+            durationMs: $durationMs,
+            rowCount: null,
+            outputBytes: null,
             details: self::cutDetails($details),
         );
     }

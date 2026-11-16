@@ -47,16 +47,22 @@ final class McpServer extends Server
         $this->name = $definition->name();
         $this->version = $definition->version();
         $this->instructions = $definition->instructions();
-        $this->tools = McpToolAdapters::fromDefinition($definition, $container);
+        $tools = McpToolAdapters::fromDefinition($definition, $container);
+        $this->tools = $tools;
+        $this->prompts = McpPromptAdapters::fromDefinition($definition, $container, McpToolAdapters::byName($tools));
         $this->capabilities = [
             self::CAPABILITY_TOOLS => ['listChanged' => false],
-            self::CAPABILITY_PROMPTS => ['listChanged' => false], // spec 5.14, 01-36 fills the list
+            self::CAPABILITY_PROMPTS => ['listChanged' => false], // spec 5.14 (01-36)
         ];
         $this->methods = array_intersect_key($this->methods, array_flip(self::METHODS));
 
         // Every tools/call reaches the pipeline, also for a hidden tool, and an unknown name is
         // audited (01-09). tools/list stays laravel/mcp's: it hides what shouldRegister() denies.
         $this->addMethod('tools/call', Methods\CallTool::class);
+
+        // Every prompts/get is audited, also for a hidden or unknown prompt (spec 5.14, 01-36).
+        // prompts/list stays laravel/mcp's: it hides what shouldRegister() denies.
+        $this->addMethod('prompts/get', Methods\GetPrompt::class);
     }
 
     /** Defence in depth for a cached registration: never run STDIO without a valid principal name. */

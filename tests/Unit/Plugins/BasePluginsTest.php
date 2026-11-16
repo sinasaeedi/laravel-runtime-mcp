@@ -4,30 +4,34 @@ declare(strict_types=1);
 
 use SinaSaeedi\RuntimeMcp\Plugins\Contracts\Plugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Core\CorePlugin;
+use SinaSaeedi\RuntimeMcp\Plugins\Core\Prompts\HealthCheck;
 use SinaSaeedi\RuntimeMcp\Plugins\Core\Tools\AppInfo;
 use SinaSaeedi\RuntimeMcp\Plugins\Database\DatabasePlugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Database\Tools\DbQuery;
 use SinaSaeedi\RuntimeMcp\Plugins\Database\Tools\DbSchema;
 use SinaSaeedi\RuntimeMcp\Plugins\Logs\LogsPlugin;
+use SinaSaeedi\RuntimeMcp\Plugins\Logs\Prompts\TriageRecentErrors;
 use SinaSaeedi\RuntimeMcp\Plugins\Logs\Tools\LogsRecentErrors;
 use SinaSaeedi\RuntimeMcp\Plugins\Logs\Tools\LogsSearch;
 use SinaSaeedi\RuntimeMcp\Plugins\Models\ModelsPlugin;
+use SinaSaeedi\RuntimeMcp\Plugins\Models\Prompts\ExplainRecord;
 use SinaSaeedi\RuntimeMcp\Plugins\Models\Tools\ModelShow;
 use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
+use SinaSaeedi\RuntimeMcp\Plugins\Queue\Prompts\InvestigateFailedJobs;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\QueuePlugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueFailedJobShow;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueFailedJobsList;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueFailedJobsSummary;
 use SinaSaeedi\RuntimeMcp\Plugins\Queue\Tools\QueueOverview;
 
-// Each tool story (01-18 to 01-26) updates the expected tools() list of its plugin here.
+// Each tool story (01-18 to 01-26) updates the expected tools() list of its plugin here; 01-36 the prompts() list.
 dataset('base plugins', [
-    'core' => [CorePlugin::class, 'core', 'app_', false, [AppInfo::class]],
-    'models' => [ModelsPlugin::class, 'models', 'model_', true, [ModelShow::class]],
-    'database' => [DatabasePlugin::class, 'database', 'db_', true, [DbSchema::class, DbQuery::class]],
+    'core' => [CorePlugin::class, 'core', 'app_', false, [AppInfo::class], [HealthCheck::class]],
+    'models' => [ModelsPlugin::class, 'models', 'model_', true, [ModelShow::class], [ExplainRecord::class]],
+    'database' => [DatabasePlugin::class, 'database', 'db_', true, [DbSchema::class, DbQuery::class], []],
     // 01-23: Testbench's queue.failed.driver is database-uuids, so the queue plugin reads a table.
-    'queue' => [QueuePlugin::class, 'queue', 'queue_', true, [QueueOverview::class, QueueFailedJobsList::class, QueueFailedJobsSummary::class, QueueFailedJobShow::class]],
-    'logs' => [LogsPlugin::class, 'logs', 'logs_', false, [LogsSearch::class, LogsRecentErrors::class]],
+    'queue' => [QueuePlugin::class, 'queue', 'queue_', true, [QueueOverview::class, QueueFailedJobsList::class, QueueFailedJobsSummary::class, QueueFailedJobShow::class], [InvestigateFailedJobs::class]],
+    'logs' => [LogsPlugin::class, 'logs', 'logs_', false, [LogsSearch::class, LogsRecentErrors::class], [TriageRecentErrors::class]],
 ]);
 
 it('knows the five base plugins, in this order', function () {
@@ -39,8 +43,9 @@ it('knows the five base plugins, in this order', function () {
 /**
  * @param  class-string<Plugin>  $class
  * @param  list<class-string>  $tools
+ * @param  list<class-string>  $prompts
  */
-it('describes a base plugin as spec 4.2 and Part B say', function (string $class, string $name, string $prefix, bool $readsDatabase, array $tools) {
+it('describes a base plugin as spec 4.2 and Part B say', function (string $class, string $name, string $prefix, bool $readsDatabase, array $tools, array $prompts) {
     $plugin = app($class);
     assert($plugin instanceof Plugin);
 
@@ -52,7 +57,7 @@ it('describes a base plugin as spec 4.2 and Part B say', function (string $class
         ->and($plugin->description())->toMatch('/^[A-Z].{10,}\.$/')
         ->and($plugin->tools())->toBe($tools)
         ->and($plugin->bootRules())->toBe([])
-        ->and($plugin->prompts())->toBe([]);
+        ->and($plugin->prompts())->toBe($prompts);
 })->with('base plugins');
 
 it('uses snake case names and prefixes that end with an underscore', function () {

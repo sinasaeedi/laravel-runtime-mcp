@@ -67,7 +67,30 @@ final class AuditLogger
      */
     public function toolCall(AuditEntry $entry): void
     {
-        if ($this->overDeniedThreshold($entry)) {
+        $this->store($entry, $entry->decision === AuditEntry::DECISION_DENIED);
+    }
+
+    /**
+     * Writes a prompts/get entry (01-36), then dispatches the same events as toolCall(): ToolDenied,
+     * ToolFailed or ToolCalled, with the prompt_get entry (spec 5.7 names four events; 01-39's kit and a
+     * team's forwarders listen to them). prompts/get has no rate limit, so every entry that is not a
+     * success counts against the denied-call threshold (01-17 Part D): denied, and refused input.
+     *
+     * @throws AuditUnavailable when the entry cannot be written: the caller withholds the prompt
+     */
+    public function promptGet(AuditEntry $entry): void
+    {
+        $this->store($entry, $entry->outcome !== AuditEntry::OUTCOME_SUCCESS);
+    }
+
+    /**
+     * @param  bool  $counted  the entry counts against the denied-call threshold
+     *
+     * @throws AuditUnavailable
+     */
+    private function store(AuditEntry $entry, bool $counted): void
+    {
+        if ($counted && $this->overDeniedThreshold($entry)) {
             $entry = $entry->withParams(['_omitted' => sprintf(self::PARAMS_OMITTED, $this->deniedCallsPerMinute)]);
         }
 
@@ -102,16 +125,12 @@ final class AuditLogger
     }
 
     /**
-     * Counts a denied entry; true past the threshold. A counter that throws (the cache is down) gives
-     * true: the short entry is always safe to write, and the call is denied anyway. Never throws, so it
-     * never becomes AuditUnavailable. An allowed entry is never counted.
+     * Counts an entry; true past the threshold. A counter that throws (the cache is down) gives true: the
+     * short entry is always safe to write, and the call is denied anyway. Never throws, so it never
+     * becomes AuditUnavailable. The caller decides which entries count (store()).
      */
     private function overDeniedThreshold(AuditEntry $entry): bool
     {
-        if ($entry->decision !== AuditEntry::DECISION_DENIED) {
-            return false;
-        }
-
         try {
             $hits = $this->container->make(RateLimiter::class)->hit(self::deniedKey($entry->environment, $entry->principal), 60);
 

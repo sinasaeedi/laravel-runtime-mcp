@@ -14,6 +14,10 @@ use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ApiKeysPresent;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\AuthDriver;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\EnvironmentName;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\PluginsInstalled;
+use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\PromptClasses;
+use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\PromptNames;
+use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\PromptsUnique;
+use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\PromptTools;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ReadOnlyConnection;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\SanctumInstalled;
 use SinaSaeedi\RuntimeMcp\Security\BootValidator;
@@ -63,6 +67,10 @@ it('lists the core rules of v1.0.0, in order', function () {
         ReadOnlyConnection::class,
         PluginsInstalled::class,
         EnvironmentName::class, // 01-02 review
+        PromptClasses::class, // 01-36
+        PromptNames::class,
+        PromptsUnique::class,
+        PromptTools::class,
     ]);
 });
 
