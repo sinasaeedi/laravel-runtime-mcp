@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SinaSaeedi\RuntimeMcp\Plugins\Logs\Tools;
 
+use Closure;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -59,6 +60,9 @@ final class LogsSearch extends RuntimeTool
 
     /** A stack whose channels were all met before (`stack` → [`stack`]): %s the channel. */
     public const NOTHING = '%s resolves to no log file.';
+
+    /** 01-37, spec 6.9: the progress message after each file. %1$d files done, %2$d files to search, %3$s the base name. */
+    public const PROGRESS = 'Searched %1$d of %2$d files (%3$s).';
 
     public function __construct(
         private readonly Repository $config,
@@ -162,6 +166,7 @@ final class LogsSearch extends RuntimeTool
             new Budget($settings->maxBytes()),
             $keep,
             $limit + 1,
+            self::progress($input, self::PROGRESS),
         );
 
         if ($scan->files === []) {
@@ -214,5 +219,18 @@ final class LogsSearch extends RuntimeTool
     private function settings(): LogSettings
     {
         return new LogSettings($this->config);
+    }
+
+    /**
+     * 01-37 (spec 5.15): LogScan's $onFile for a tool's progress message. The base name comes from the channel config
+     * and the file system listing, never from a log line, so the message holds counts and config names only.
+     *
+     * @return Closure(int, int, string): void
+     */
+    public static function progress(ToolInput $input, string $format): Closure
+    {
+        return function (int $done, int $total, string $file) use ($input, $format): void {
+            $input->progress()->report($done, $total, sprintf($format, $done, $total, $file));
+        };
     }
 }
