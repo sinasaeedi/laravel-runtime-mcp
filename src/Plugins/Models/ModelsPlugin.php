@@ -7,6 +7,7 @@ namespace SinaSaeedi\RuntimeMcp\Plugins\Models;
 use Illuminate\Contracts\Config\Repository;
 use SinaSaeedi\RuntimeMcp\Plugins\AbstractPlugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Models\Doctor\ModelsCheck;
+use SinaSaeedi\RuntimeMcp\Plugins\Models\Prompts\ExplainRecord;
 use SinaSaeedi\RuntimeMcp\Plugins\Models\Tools\ModelShow;
 
 /** Base plugin (spec 4.2): no package needed, on by default. Tools: model_show (01-21). */
@@ -47,5 +48,11 @@ final class ModelsPlugin extends AbstractPlugin
     public function doctorChecks(): array
     {
         return [new ModelsCheck(new ModelRegistry($this->config), $this->config)];
+    }
+
+    /** Spec 6.11 (01-36). */
+    public function prompts(): array
+    {
+        return [ExplainRecord::class];
     }
 }
