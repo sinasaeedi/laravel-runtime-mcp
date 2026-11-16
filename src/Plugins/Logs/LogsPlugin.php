@@ -7,6 +7,7 @@ namespace SinaSaeedi\RuntimeMcp\Plugins\Logs;
 use Illuminate\Contracts\Config\Repository;
 use SinaSaeedi\RuntimeMcp\Plugins\AbstractPlugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Logs\Doctor\LogsCheck;
+use SinaSaeedi\RuntimeMcp\Plugins\Logs\Prompts\TriageRecentErrors;
 use SinaSaeedi\RuntimeMcp\Plugins\Logs\Tools\LogsRecentErrors;
 use SinaSaeedi\RuntimeMcp\Plugins\Logs\Tools\LogsSearch;
 
@@ -48,5 +49,11 @@ final class LogsPlugin extends AbstractPlugin
     public function doctorChecks(): array
     {
         return [new LogsCheck($this->config, new LogChannelResolver($this->config))];
+    }
+
+    /** Spec 6.11 (01-36). */
+    public function prompts(): array
+    {
+        return [TriageRecentErrors::class];
     }
 }
