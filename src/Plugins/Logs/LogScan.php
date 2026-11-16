@@ -13,6 +13,10 @@ use Generator;
  * daily channel) is one stream of entries over its files; the streams are merged by time, so a stack of two channels
  * gives one list in time order (one source after the other would fill `limit` from the first and hide newer entries of
  * the second). A file reached by two channels is read once. 01-26 reuses this with its own keep closure.
+ *
+ * 01-37 (spec 5.15, 6.9, 6.10): $onFile hears about each file when the scan is done with it. The total is known
+ * before the first read; the count is shared by the merged sources. A source that stops early (an entry older than
+ * `from`, the budget, or enough rows kept) reports no more files, so the last count can stay below the total.
  */
 final class LogScan
 {
@@ -37,14 +41,17 @@ final class LogScan
      * @param  CarbonImmutable|null  $to  entries after it are skipped; daily files after its day are not read (default: now)
      * @param  Closure(LogEntry, LogSource, string): (array<string, mixed>|null)  $keep  the row for a matching entry, or null
      * @param  int  $want  stop when this many rows are kept
+     * @param  (Closure(int, int, string): void)|null  $onFile  after each file read to its end or skipped: the count of such
+     *                                                          files so far, the number of files to scan, the base name
      */
-    public function run(ResolvedChannel $resolved, ?CarbonImmutable $from, ?CarbonImmutable $to, Budget $budget, Closure $keep, int $want): ScanResult
+    public function run(ResolvedChannel $resolved, ?CarbonImmutable $from, ?CarbonImmutable $to, Budget $budget, Closure $keep, int $want, ?Closure $onFile = null): ScanResult
     {
         $skipped = $resolved->skipped;
         $read = [];
         $cut = false;
         $seen = [];
-        $streams = [];
+        $lists = [];
+        $done = 0;
 
         foreach ($resolved->sources as $source) {
             $files = [];
@@ -60,8 +67,22 @@ final class LogScan
             }
 
             if ($files !== []) {
-                $streams[] = [$source, $this->stream($source, $files, $from, $budget, $read, $skipped, $cut)];
+                $lists[] = [$source, $files];
             }
+        }
+
+        $total = array_sum(array_map(fn (array $list): int => count($list[1]), $lists));
+        $finished = function (string $name) use (&$done, $total, $onFile): void {
+            $done++;
+
+            if ($onFile !== null) {
+                $onFile($done, $total, $name);
+            }
+        };
+        $streams = [];
+
+        foreach ($lists as [$source, $files]) {
+            $streams[] = [$source, $this->stream($source, $files, $from, $budget, $read, $skipped, $cut, $finished)];
         }
 
         $kept = [];
@@ -124,14 +145,15 @@ final class LogScan
 
     /**
      * The entries of one source, newest first, over its files (newest first). Records each file it read, each file it
-     * could not read, and a budget cut.
+     * could not read, and a budget cut. Calls $finished with the base name of each file it read to its end or skipped.
      *
      * @param  list<string>  $files
      * @param  array<string, string>  $read  path => base name, in the order the files were opened
      * @param  list<string>  $skipped
+     * @param  Closure(string): void  $finished
      * @return Generator<int, array{LogEntry, string}>
      */
-    private function stream(LogSource $source, array $files, ?CarbonImmutable $from, Budget $budget, array &$read, array &$skipped, bool &$cut): Generator
+    private function stream(LogSource $source, array $files, ?CarbonImmutable $from, Budget $budget, array &$read, array &$skipped, bool &$cut, Closure $finished): Generator
     {
         foreach ($files as $path) {
             $name = basename($path);
@@ -139,6 +161,7 @@ final class LogScan
 
             if ($problem !== null) {
                 $skipped[] = $problem;
+                $finished($name);
 
                 continue;
             }
@@ -187,6 +210,8 @@ final class LogScan
                 unset($read[$path]);
                 $skipped[] = $problem;
             }
+
+            $finished($name);
         }
     }
 }
