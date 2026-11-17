@@ -36,12 +36,14 @@ final class Tokens
         ];
     }
 
-    /** The users table, another owner table, and the columns of Sanctum's migration (v4.3.3). */
-    public static function tables(): void
+    /** The users table, another owner table, and the columns of Sanctum's migration (v4.3.3), on a connection. */
+    public static function tables(?string $connection = null): void
     {
+        $schema = Schema::connection($connection);
+
         foreach (['users', 'other_token_owners'] as $name) {
-            if (! Schema::hasTable($name)) {
-                Schema::create($name, function (Blueprint $table): void {
+            if (! $schema->hasTable($name)) {
+                $schema->create($name, function (Blueprint $table): void {
                     $table->id();
                     $table->string('email')->unique();
                     $table->string('password')->default('');
@@ -50,8 +52,8 @@ final class Tokens
             }
         }
 
-        if (! Schema::hasTable('personal_access_tokens')) {
-            Schema::create('personal_access_tokens', function (Blueprint $table): void {
+        if (! $schema->hasTable('personal_access_tokens')) {
+            $schema->create('personal_access_tokens', function (Blueprint $table): void {
                 $table->id();
                 $table->morphs('tokenable');
                 $table->text('name');

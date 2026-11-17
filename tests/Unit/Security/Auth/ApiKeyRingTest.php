@@ -131,3 +131,14 @@ it('reads runtime-mcp.auth.api_keys', function () {
 
     expect(ApiKeyRing::fromConfig(app('config'))->match(apiKeyRingKey('a')))->toBe('sina');
 });
+
+// 01-27: runtime-mcp:key appends its pair to these.
+it('KR1 gives each valid pair as name:lower-case hash, in config order, without spaces or empty segments', function () {
+    $value = ' sina:'.strtoupper(ApiKey::hash(apiKeyRingKey('a'))).' ,  ,'.apiKeyRingEntry('ops', 'b').',';
+
+    expect((new ApiKeyRing($value))->pairs())->toBe([apiKeyRingEntry('sina', 'a'), apiKeyRingEntry('ops', 'b')]);
+});
+
+it('KR2 gives no pair for an empty ring', function (mixed $value) {
+    expect((new ApiKeyRing($value))->pairs())->toBe([]);
+})->with([null, '', ' , ']);
