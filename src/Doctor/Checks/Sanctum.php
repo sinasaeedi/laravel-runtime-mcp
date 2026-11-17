@@ -26,7 +26,8 @@ use Throwable;
  */
 final class Sanctum implements Check
 {
-    private const CLASS_NAME = '/^[A-Za-z_][A-Za-z0-9_]*(\\\\[A-Za-z_][A-Za-z0-9_]*)*$/D';
+    /** A class name that may be printed (01-12: only a value with the shape of a name). 01-27's token command reuses it. */
+    public const CLASS_NAME = '/^[A-Za-z_][A-Za-z0-9_]*(\\\\[A-Za-z_][A-Za-z0-9_]*)*$/D';
 
     private const TABLE_NAME = '/^[A-Za-z0-9_.]{1,64}$/D';
 
