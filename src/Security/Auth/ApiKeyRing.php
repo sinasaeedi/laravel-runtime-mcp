@@ -83,6 +83,17 @@ final class ApiKeyRing
     }
 
     /**
+     * Every valid entry as "name:<lower-case hash>", in config order (01-27: the new RUNTIME_MCP_API_KEYS
+     * value is these plus the new pair). Hashes only: no key and no raw segment text.
+     *
+     * @return list<string>
+     */
+    public function pairs(): array
+    {
+        return array_map(fn (array $entry): string => "{$entry[0]}:{$entry[1]}", $this->entries);
+    }
+
+    /**
      * The name of the entry whose hash matches, or null. Compares every entry, with no early
      * return, so the work is the same for the first key, the last key and a wrong key. A ring with
      * a malformed segment matches nothing (01-10 keeps the endpoint off; this is the second lock).
