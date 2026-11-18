@@ -14,6 +14,8 @@ use InvalidArgumentException;
 use SinaSaeedi\RuntimeMcp\Plugins\Contracts\Plugin;
 use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
 use SinaSaeedi\RuntimeMcp\Security\Auth\ApiKey;
+use SinaSaeedi\RuntimeMcp\Security\Grants\ColumnMask;
+use SinaSaeedi\RuntimeMcp\Security\Grants\DeniedTables;
 use SinaSaeedi\RuntimeMcp\Security\Grants\InvalidGrantConfig;
 use SinaSaeedi\RuntimeMcp\Security\Grants\RoleSqlGenerator;
 use SinaSaeedi\RuntimeMcp\Security\Grants\SchemaSnapshot;
@@ -263,12 +265,17 @@ final class InstallCommand extends Command
     private function roleSql(Repository $config, DatabaseManager $db, PluginRegistry $registry, string $role, string $host): string
     {
         try {
-            $generator = $this->laravel->make(RoleSqlGenerator::class);
+            // The binding reads the same lists in the same order. Read here, the throw is visible to PHPStan:
+            // Container::make() declares only BindingResolutionException.
+            ColumnMask::fromConfig($config);
+            DeniedTables::fromConfig($config);
         } catch (InvalidGrantConfig $e) {
             $this->components->error(OutputFormatter::escape($e->getMessage()));
 
             return 'failed';
         }
+
+        $generator = $this->laravel->make(RoleSqlGenerator::class);
 
         $name = $db->getDefaultConnection();
 
