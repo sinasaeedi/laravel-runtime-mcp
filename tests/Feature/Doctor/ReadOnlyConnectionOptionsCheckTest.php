@@ -83,3 +83,29 @@ it('RC8 comes right after ReadOnlyTransactionConnections, with its title', funct
     expect(array_search(ReadOnlyConnectionOptions::class, Doctor::CHECKS, true))->toBe(array_search(ReadOnlyTransactionConnections::class, Doctor::CHECKS, true) + 1)
         ->and(app(ReadOnlyConnectionOptions::class)->title())->toBe('Read-only connection');
 });
+
+it('RC9 warns for a transaction pooler (Laravel 13 pooled or direct), and never prints the direct host (01-28 triage)', function (array $settings) {
+    $config = [];
+
+    foreach ($settings as $key => $value) {
+        $config[readOnlyOptionsKey($key)] = $value;
+    }
+
+    currentTest()->bootWith($config);
+    $results = app(ReadOnlyConnectionOptions::class)->run();
+
+    expect(array_map(fn (CheckResult $result): array => [$result->status->value, $result->message, $result->fix], $results))->toBe([[
+        'warn',
+        'The read-only connection goes through a transaction pooler (pooled or direct). The session reset after each query can reach another server session, so a lock or a setting can stay.',
+        'Point the read-only connection at the direct host or at a session pooler, with no pooled or direct keys.',
+    ]])->and(str_contains(implode(' ', array_map(fn (CheckResult $result): string => $result->message.' '.$result->fix, $results)), 'db-direct.invalid'))->toBeFalse();
+})->with([
+    'pooled' => [['pooled' => true]],
+    'direct' => [['direct' => ['host' => 'db-direct.invalid']]],
+    'pooled and direct' => [['pooled' => true, 'direct' => ['host' => 'db-direct.invalid']]],
+]);
+
+it('RC10 does not warn for pooled false or an empty direct block, as in the stock Laravel 13 config (01-28 triage)', function () {
+    expect(readOnlyOptionsResults([readOnlyOptionsKey('pooled') => false, readOnlyOptionsKey('direct') => []]))
+        ->toBe([['pass', 'The read-only connection is not persistent and has one host.']]);
+});
