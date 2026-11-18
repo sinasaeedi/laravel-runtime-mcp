@@ -15,7 +15,8 @@ use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
 /**
  * Spec 5.2, 5.13, 01-14 re-review (2026-10-29): the options of the connection that ReadOnlySession uses.
  * A persistent PDO makes every package query fail (ReadOnlySession::PERSISTENT); read and write hosts send
- * every query to the write host, because the frame runs it in a transaction. Config only: no connection
+ * every query to the write host, because the frame runs it in a transaction; a transaction pooler (Laravel 13's
+ * pooled or direct keys) can let the reset reach another server session (01-28 triage). Config only: no connection
  * is opened, and no name or host is printed. A missing connection is 01-13's and the boot rules' to report.
  */
 final class ReadOnlyConnectionOptions implements Check
@@ -62,6 +63,14 @@ final class ReadOnlyConnectionOptions implements Check
             $results[] = CheckResult::warn(
                 'The read-only connection has read and write hosts. Every package query runs in a transaction, so it uses the write host.',
                 'To query a read replica, make the replica its only host (no read and write keys).',
+            );
+        }
+
+        // Laravel 13 marks a transaction pooler so (01-28 triage): spec 5.2 allows session pooling only.
+        if (($settings['pooled'] ?? false) === true || ! empty($settings['direct'])) {
+            $results[] = CheckResult::warn(
+                'The read-only connection goes through a transaction pooler (pooled or direct). The session reset after each query can reach another server session, so a lock or a setting can stay.',
+                'Point the read-only connection at the direct host or at a session pooler, with no pooled or direct keys.',
             );
         }
 
