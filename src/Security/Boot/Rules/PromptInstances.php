@@ -8,6 +8,7 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Container\Container;
 use LogicException;
 use ReflectionClass;
+use SinaSaeedi\RuntimeMcp\Mcp\Wrapped\WrappedTools;
 use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
 use SinaSaeedi\RuntimeMcp\Prompts\Contracts\RuntimePrompt;
 use SinaSaeedi\RuntimeMcp\Server\RuntimeServer;
@@ -25,6 +26,7 @@ final class PromptInstances
         private readonly Repository $config,
         private readonly PluginRegistry $plugins,
         private readonly RuntimeServer $server,
+        private readonly WrappedTools $wrapped,
     ) {}
 
     /**
@@ -70,7 +72,12 @@ final class PromptInstances
         return $prompts;
     }
 
-    /** @return list<string> the names of the registered tools: the active plugins', then the custom ones (01-29) */
+    /**
+     * The names of the registered tools: the active plugins', the custom ones (01-29), then the wrapped ones (01-38), so
+     * a custom prompt may need any of them (01-36).
+     *
+     * @return list<string>
+     */
     public function toolNames(): array
     {
         $names = [];
@@ -81,6 +88,10 @@ final class PromptInstances
             if ($tool instanceof RuntimeTool) {
                 $names[] = $tool->name();
             }
+        }
+
+        foreach ($this->wrapped->build() as $tool) {
+            $names[] = $tool->name();
         }
 
         return $names;
