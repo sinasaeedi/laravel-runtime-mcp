@@ -1,0 +1,62 @@
+<?php
+
+namespace {{ namespace }};
+
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use SinaSaeedi\RuntimeMcp\Tools\Contracts\RuntimeTool;
+use SinaSaeedi\RuntimeMcp\Tools\Tier;
+use SinaSaeedi\RuntimeMcp\Tools\ToolInput;
+use SinaSaeedi\RuntimeMcp\Tools\ToolResult;
+
+/**
+ * A Runtime MCP tool. It runs behind the guard pipeline: the Gate runtime-mcp.{{ tool }}, the rate
+ * limits, the read-only transaction, redaction, the size cap and the audit.
+ *
+ * The constructor runs on every MCP request and at boot: inject your services, but do no I/O in it.
+ */
+final class {{ class }} extends RuntimeTool
+{
+    public function name(): string
+    {
+        return '{{ tool }}';
+    }
+
+    // Written for an LLM. Say what it returns and state every input limit.
+    public function description(): string
+    {
+        return 'TODO: what this tool returns. Input: … (at most … characters).';
+    }
+
+    public function tier(): Tier
+    {
+        return Tier::{{ tier }};
+    }
+
+    // True when this tool calls an external system. The package cannot check that the call is
+    // read-only: the tier is your claim. Database writes are blocked on the default connection and on
+    // each connection in runtime-mcp.read_only_transactions.connections (add every other connection
+    // you use there); HTTP, SOAP, Redis and files are not.
+    public function opensWorld(): bool
+    {
+        return {{ openWorld }};
+    }
+
+    // Types, max lengths, enums, max limits. Keep it in step with rules().
+    public function schema(JsonSchema $schema): array
+    {
+        return [];
+    }
+
+    // The same limits, enforced. An argument that no rule names is refused.
+    public function rules(): array
+    {
+        return [];
+    }
+
+    // Bound your own work: a timeout on every external call, a maximum count on every list.
+    // Return ToolResult::unavailable('why') when you could not look, never an empty result.
+    public function execute(ToolInput $input): ToolResult
+    {
+        return ToolResult::unavailable('Not implemented yet.');
+    }
+}
