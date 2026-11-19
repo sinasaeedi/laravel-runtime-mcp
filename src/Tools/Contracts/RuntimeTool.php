@@ -46,6 +46,19 @@ abstract class RuntimeTool
      */
     abstract public function rules(): array;
 
+    /** The note of a call that available() refuses: a denial, audited as `not_available` (01-38). */
+    public const NOT_AVAILABLE = 'Access denied: the tool itself says it is not available for this request.';
+
+    /**
+     * False hides the tool and refuses its calls, beside the Gate (McpToolAdapter::shouldRegister()). True for every tool
+     * of this package; a wrapped laravel/mcp tool answers with its own shouldRegister() (01-38). RunTool asks it first, before
+     * the arguments are checked, so a refused call is always a `not_available` denial.
+     */
+    public function available(): bool
+    {
+        return true;
+    }
+
     /** The tool's own work. Bound its own work (spec 4.3): row limits, byte limits, counts. */
     abstract public function execute(ToolInput $input): ToolResult;
 
