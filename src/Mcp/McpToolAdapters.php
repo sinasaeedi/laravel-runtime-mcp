@@ -27,7 +27,8 @@ final class McpToolAdapters
         $adapters = [];
 
         foreach ($definition->tools() as $class) {
-            $tool = $container->make($class);
+            // RuntimeServer::tools() lists only classes that exist; this check is defence in depth, as McpPromptAdapters.
+            $tool = class_exists($class) ? $container->make($class) : null;
 
             if (! $tool instanceof RuntimeTool) {
                 throw new LogicException("[{$class}] is not a RuntimeTool.");
