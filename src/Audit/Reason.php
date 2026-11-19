@@ -38,6 +38,7 @@ enum Reason: string
     // The tools/call handler and model Policies (01-09).
     case UnknownTool = 'unknown_tool';
     case PolicyDenied = 'policy_denied';
+    case NotAvailable = 'not_available'; // a wrapped tool's own shouldRegister() said no (01-38)
 
     // The prompts/get handler (01-36).
     case UnknownPrompt = 'unknown_prompt';
