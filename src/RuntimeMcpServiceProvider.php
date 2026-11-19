@@ -15,6 +15,7 @@ use SinaSaeedi\RuntimeMcp\Audit\AuditLogger;
 use SinaSaeedi\RuntimeMcp\Console\DoctorCommand;
 use SinaSaeedi\RuntimeMcp\Console\InstallCommand;
 use SinaSaeedi\RuntimeMcp\Console\KeyCommand;
+use SinaSaeedi\RuntimeMcp\Console\MakeToolCommand;
 use SinaSaeedi\RuntimeMcp\Console\TokenCommand;
 use SinaSaeedi\RuntimeMcp\Mcp\McpRoutes;
 use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
@@ -81,8 +82,13 @@ class RuntimeMcpServiceProvider extends ServiceProvider
                 __DIR__.'/../config/runtime-mcp.php' => $this->app->configPath('runtime-mcp.php'),
             ], 'runtime-mcp-config');
 
-            // Spec 7.3 (01-12), 7.2 and 7.2a (01-27), 7.1 (01-28). TokenCommand also without Sanctum: it says so itself.
-            $this->commands([DoctorCommand::class, KeyCommand::class, TokenCommand::class, InstallCommand::class]);
+            // Spec 7.4 (01-29): the custom tool stub; make-tool reads the published copy first. 01-39 adds its test stub.
+            $this->publishes([
+                __DIR__.'/../'.MakeToolCommand::STUB => $this->app->basePath(MakeToolCommand::STUB),
+            ], 'runtime-mcp-stubs');
+
+            // Spec 7.3 (01-12), 7.2 and 7.2a (01-27), 7.1 (01-28), 7.4 (01-29). TokenCommand also without Sanctum: it says so itself.
+            $this->commands([DoctorCommand::class, KeyCommand::class, TokenCommand::class, InstallCommand::class, MakeToolCommand::class]);
         }
 
         // Spec 5.7: the audit channel, unless the app defines it. Before the enabled check: the
