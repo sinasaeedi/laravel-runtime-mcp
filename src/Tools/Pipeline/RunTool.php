@@ -10,9 +10,11 @@ use Illuminate\Contracts\Validation\Factory;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Validation\ValidationException;
 use JsonSerializable;
+use SinaSaeedi\RuntimeMcp\Audit\Reason;
 use SinaSaeedi\RuntimeMcp\Security\ReadOnly\WriteAttemptExplainer;
 use SinaSaeedi\RuntimeMcp\Security\Redaction\Redactor;
 use SinaSaeedi\RuntimeMcp\Tools\AuthorizationDenied;
+use SinaSaeedi\RuntimeMcp\Tools\Contracts\RuntimeTool;
 use SinaSaeedi\RuntimeMcp\Tools\ToolCall;
 use SinaSaeedi\RuntimeMcp\Tools\ToolInput;
 use SinaSaeedi\RuntimeMcp\Tools\ToolOutcome;
@@ -43,6 +45,12 @@ final class RunTool
 
     public function handle(ToolCall $call): ToolOutcome
     {
+        // Before rules(): a hidden tool is denied whatever the arguments, and its schema() never runs (01-38 triage m1).
+        // Inside the read-only transaction, like the rest of stage 5.
+        if (! $call->tool->available()) {
+            return ToolOutcome::denied(Reason::NotAvailable, RuntimeTool::NOT_AVAILABLE);
+        }
+
         $rules = $call->tool->rules();
         $validator = $this->validation->make($call->arguments, $rules);
         $unknown = self::unknownKeys($call->arguments, $rules);
@@ -67,6 +75,9 @@ final class RunTool
         } catch (AuthorizationDenied $e) {
             // A Policy inside the tool said no (01-21): a denial, audited with its reason, never reported.
             return ToolOutcome::denied($e->reason, $e->getMessage());
+        } catch (ValidationException $e) {
+            // The tool validated its own input (a wrapped laravel/mcp tool, 01-38): the same answer as the rules give.
+            return ToolOutcome::failed($e, 'Invalid input: '.$this->cut(implode(' ', $e->validator->errors()->all())));
         } catch (Throwable $e) {
             // Spec 4.4: the full exception goes to the app's log; the agent gets the class and the
             // redacted message. A write that the read-only transaction blocked gets its own note (01-16).
