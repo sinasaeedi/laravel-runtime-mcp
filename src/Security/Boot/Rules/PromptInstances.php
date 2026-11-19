@@ -70,7 +70,7 @@ final class PromptInstances
         return $prompts;
     }
 
-    /** @return list<string> the names of the registered tools (the active plugins') */
+    /** @return list<string> the names of the registered tools: the active plugins', then the custom ones (01-29) */
     public function toolNames(): array
     {
         $names = [];

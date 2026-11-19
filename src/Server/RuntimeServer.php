@@ -8,6 +8,7 @@ use Composer\InstalledVersions;
 use Illuminate\Contracts\Config\Repository;
 use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
 use SinaSaeedi\RuntimeMcp\Security\Environment;
+use SinaSaeedi\RuntimeMcp\Tools\CustomTools;
 
 /**
  * What the server says about itself (spec 4.6). No laravel/mcp import (spec 4.1).
@@ -48,10 +49,16 @@ final class RuntimeServer
             TEXT;
     }
 
-    /** @return list<class-string> the tools of the active plugins, in registry order (spec 4.2) */
+    /**
+     * The tools of the active plugins, in registry order (spec 4.2), then the entries of runtime-mcp.tools that
+     * CustomTools accepts, in config order (spec 4.5, 7.4; 01-29). A refused entry is left out here, so McpServer and
+     * the boot rules never build it; the tools.class boot rule has failed for it already.
+     *
+     * @return list<class-string>
+     */
     public function tools(): array
     {
-        return $this->plugins->tools();
+        return [...$this->plugins->tools(), ...(new CustomTools($this->config, $this->plugins))->classes()];
     }
 
     /**
