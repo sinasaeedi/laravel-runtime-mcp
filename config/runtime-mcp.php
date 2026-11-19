@@ -100,8 +100,11 @@ return [
     ],
 
     // Spec 7.4. Used first by 01-29.
-    // Your own tools (php artisan runtime-mcp:make-tool). Each extends RuntimeTool (Sina, 2026-10-02).
-    'tools' => [],
+    // Your own tools (php artisan runtime-mcp:make-tool). Each extends RuntimeTool (Sina, 2026-10-02)
+    // and needs a Gate: runtime-mcp.<tool_name>. A tool of this package is turned on in `plugins`, not here.
+    'tools' => [
+        // App\RuntimeMcp\Tools\OrderStatusFromErp::class,
+    ],
 
     // Spec 5.16. Used first by 01-38.
     // Official laravel/mcp tools that run behind the guard pipeline (section 5.16).
