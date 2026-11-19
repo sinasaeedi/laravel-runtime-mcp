@@ -7,6 +7,7 @@ namespace SinaSaeedi\RuntimeMcp\Security\Boot\Rules;
 use Illuminate\Contracts\Container\Container;
 use LogicException;
 use SinaSaeedi\RuntimeMcp\Mcp\McpToolAdapter;
+use SinaSaeedi\RuntimeMcp\Mcp\Wrapped\WrappedTools;
 use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
 use SinaSaeedi\RuntimeMcp\Tools\Contracts\RuntimeTool;
 use SinaSaeedi\RuntimeMcp\Tools\CustomTools;
@@ -22,9 +23,10 @@ final class ToolInstances
         private readonly Container $container,
         private readonly PluginRegistry $plugins,
         private readonly CustomTools $custom,
+        private readonly WrappedTools $wrapped,
     ) {}
 
-    /** @return list<RuntimeTool> the active plugins' tools, then the custom ones that register */
+    /** @return list<RuntimeTool> the active plugins' tools, then the custom ones that register, then the wrapped ones (01-38) */
     public function all(): array
     {
         $tools = [];
@@ -33,7 +35,7 @@ final class ToolInstances
             $tools[] = $this->make($class);
         }
 
-        return [...$tools, ...$this->custom()];
+        return [...$tools, ...$this->custom(), ...$this->wrapped()];
     }
 
     /** @return list<RuntimeTool> the entries of runtime-mcp.tools that register; tools.class reports the others */
@@ -53,6 +55,25 @@ final class ToolInstances
                 (new McpToolAdapter($tool, $this->container))->toArray();
             }
 
+            $tools[] = $tool;
+        }
+
+        return $tools;
+    }
+
+    /**
+     * The valid entries of runtime-mcp.wrapped_tools (01-38), with the adapter and its toArray() built as for a custom
+     * tool: a throwing official constructor, description() or schema() turns the endpoint off. build() leaves out every
+     * entry with a bad name, so each one gets its adapter.
+     *
+     * @return list<RuntimeTool>
+     */
+    public function wrapped(): array
+    {
+        $tools = [];
+
+        foreach ($this->wrapped->build() as $tool) {
+            (new McpToolAdapter($tool, $this->container))->toArray();
             $tools[] = $tool;
         }
 

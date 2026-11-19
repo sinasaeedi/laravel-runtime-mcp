@@ -122,10 +122,11 @@ final class McpToolAdapter extends Tool
     /**
      * Spec 5.5: hides a tool that the Gate denies from tools/list. laravel/mcp calls it through the
      * container (Primitive::eligibleForRegistration()). A convenience only: CheckGateStage enforces.
+     * The Gate is asked first, so a wrapped tool's own shouldRegister() never runs for a denied principal (01-38).
      */
     public function shouldRegister(ToolGate $gate, CurrentPrincipal $principals): bool
     {
-        return $gate->decide($principals->get(), $this->tool)->allowed;
+        return $gate->decide($principals->get(), $this->tool)->allowed && $this->tool->available();
     }
 
     /**

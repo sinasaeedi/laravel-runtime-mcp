@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Foundation\Application;
+use SinaSaeedi\RuntimeMcp\Mcp\Wrapped\Rules\WrappedToolClasses;
+use SinaSaeedi\RuntimeMcp\Mcp\Wrapped\Rules\WrappedToolDescriptions;
+use SinaSaeedi\RuntimeMcp\Mcp\Wrapped\Rules\WrappedToolEntries;
+use SinaSaeedi\RuntimeMcp\Mcp\Wrapped\Rules\WrappedToolNames;
+use SinaSaeedi\RuntimeMcp\Mcp\Wrapped\Rules\WrappedToolOpenWorld;
+use SinaSaeedi\RuntimeMcp\Mcp\Wrapped\Rules\WrappedToolRendersApp;
+use SinaSaeedi\RuntimeMcp\Mcp\Wrapped\Rules\WrappedToolTiers;
 use SinaSaeedi\RuntimeMcp\Plugins\Contracts\Plugin;
 use SinaSaeedi\RuntimeMcp\Plugins\Core\CorePlugin;
 use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
@@ -73,6 +80,13 @@ it('lists the core rules of v1.0.0, in order', function () {
         ToolClasses::class, // 01-29
         ToolNames::class,
         ToolsUnique::class,
+        WrappedToolEntries::class, // 01-38
+        WrappedToolClasses::class,
+        WrappedToolNames::class,
+        WrappedToolTiers::class,
+        WrappedToolOpenWorld::class,
+        WrappedToolRendersApp::class,
+        WrappedToolDescriptions::class,
         PromptClasses::class, // 01-36
         PromptNames::class,
         PromptsUnique::class,

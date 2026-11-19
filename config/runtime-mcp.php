@@ -107,9 +107,13 @@ return [
     ],
 
     // Spec 5.16. Used first by 01-38.
-    // Official laravel/mcp tools that run behind the guard pipeline (section 5.16).
-    // ['class' => App\Mcp\Tools\OrderLookup::class, 'name' => 'app_order_lookup', 'tier' => 'read_sensitive', 'open_world' => false]
-    'wrapped_tools' => [],
+    // Official laravel/mcp tools (php artisan make:mcp-tool) that run behind the guard pipeline (section 5.16). Each entry
+    // has exactly these keys; `name` follows this package's rule (lower snake case) and needs a Gate:
+    // runtime-mcp.<name>. `tier` is read or read_sensitive, and it is your claim: the read-only transaction blocks
+    // database writes on the default connection and on read_only_transactions.connections only.
+    'wrapped_tools' => [
+        // ['class' => App\Mcp\Tools\OrderLookupTool::class, 'name' => 'app_order_lookup', 'tier' => 'read_sensitive', 'open_world' => false],
+    ],
 
     // Spec 5.14. Used first by 01-36.
     // Your own prompts. Each extends RuntimePrompt (section 5.14).
