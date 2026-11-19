@@ -11,7 +11,7 @@ it('has the stable reason codes of v1.0.0', function () {
         'linked_user_missing', 'unsupported_auth_driver', 'bad_host', 'bad_origin',
         'unknown_token', 'token_expired', 'token_missing_ability', 'token_owner_invalid', 'token_lookup_failed',
         'no_principal', 'no_gate', 'gate_denied', 'gate_error', 'rate_limited', 'rate_limit_unavailable',
-        'unknown_tool', 'policy_denied',
+        'unknown_tool', 'policy_denied', 'not_available',
         'unknown_prompt', 'prompt_tool_denied',
     ]);
 });
