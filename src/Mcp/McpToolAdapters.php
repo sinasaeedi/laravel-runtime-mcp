@@ -6,6 +6,7 @@ namespace SinaSaeedi\RuntimeMcp\Mcp;
 
 use Illuminate\Contracts\Container\Container;
 use LogicException;
+use SinaSaeedi\RuntimeMcp\Mcp\Wrapped\WrappedTools;
 use SinaSaeedi\RuntimeMcp\Server\RuntimeServer;
 use SinaSaeedi\RuntimeMcp\Tools\Contracts\RuntimeTool;
 
@@ -18,7 +19,8 @@ final class McpToolAdapters
     /**
      * Spec 4.2: every tool directly, each with an integer key, never under ToolSearch::class
      * (01-40 adds the operator's catalog switch). Each tool is wrapped in its own McpToolAdapter,
-     * the only object laravel/mcp ever calls (spec 4.4).
+     * the only object laravel/mcp ever calls (spec 4.4). The wrapped laravel/mcp tools come last, in config order
+     * (01-38): each is a RuntimeTool built from its config entry, not a class name of RuntimeServer::tools().
      *
      * @return list<McpToolAdapter>
      */
@@ -34,6 +36,10 @@ final class McpToolAdapters
                 throw new LogicException("[{$class}] is not a RuntimeTool.");
             }
 
+            $adapters[] = new McpToolAdapter($tool, $container);
+        }
+
+        foreach ($container->make(WrappedTools::class)->build() as $tool) {
             $adapters[] = new McpToolAdapter($tool, $container);
         }
 
