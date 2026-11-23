@@ -1,0 +1,34 @@
+<?php
+
+use {{ toolClass }};
+use Illuminate\Support\Facades\Gate;
+use SinaSaeedi\RuntimeMcp\Testing\RuntimeMcp;
+
+// The Runtime MCP test kit runs every call through the real server and the guard pipeline, as the
+// principal of as(). Do not use RefreshDatabase in a test that calls a tool: the tool's read-only
+// transaction cannot open inside the test's transaction. Use DatabaseMigrations or DatabaseTruncation.
+
+beforeEach(function () {
+    // Registers the tool for this test, also before you add it to runtime-mcp.tools.
+    config(['runtime-mcp.tools' => [{{ class }}::class]]);
+});
+
+it('keeps the tool contract', function () {
+    RuntimeMcp::assertToolContract({{ class }}::class);
+});
+
+it('is denied when its Gate refuses', function () {
+    // Defines the Gate here, so the test still holds once your app defines it (next step 2).
+    Gate::define('runtime-mcp.{{ tool }}', fn () => false);
+
+    RuntimeMcp::test()->as('test-developer')->call('{{ tool }}')->assertDenied('gate_denied');
+});
+
+it('returns an envelope with a Gate', function () {
+    Gate::define('runtime-mcp.{{ tool }}', fn () => true);
+
+    RuntimeMcp::test()->as('test-developer')->call('{{ tool }}')
+        ->assertStatus('unavailable') // TODO: assertOk() and assertData() once execute() is written.
+        ->assertMatchesOutputSchema()
+        ->assertAudited('allowed');
+});
