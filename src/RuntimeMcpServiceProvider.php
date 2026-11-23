@@ -82,10 +82,11 @@ class RuntimeMcpServiceProvider extends ServiceProvider
                 __DIR__.'/../config/runtime-mcp.php' => $this->app->configPath('runtime-mcp.php'),
             ], 'runtime-mcp-config');
 
-            // Spec 7.4 (01-29): the custom tool stub; make-tool reads the published copy first. 01-39 adds its test stub.
-            $this->publishes([
-                __DIR__.'/../'.MakeToolCommand::STUB => $this->app->basePath(MakeToolCommand::STUB),
-            ], 'runtime-mcp-stubs');
+            // Spec 7.4 (01-29, 01-39): the custom tool stub and its two test stubs; make-tool reads a published copy first.
+            $this->publishes(array_combine(
+                array_map(fn (string $stub): string => __DIR__.'/../'.$stub, MakeToolCommand::STUBS),
+                array_map(fn (string $stub): string => $this->app->basePath($stub), MakeToolCommand::STUBS),
+            ), 'runtime-mcp-stubs');
 
             // Spec 7.3 (01-12), 7.2 and 7.2a (01-27), 7.1 (01-28), 7.4 (01-29). TokenCommand also without Sanctum: it says so itself.
             $this->commands([DoctorCommand::class, KeyCommand::class, TokenCommand::class, InstallCommand::class, MakeToolCommand::class]);
