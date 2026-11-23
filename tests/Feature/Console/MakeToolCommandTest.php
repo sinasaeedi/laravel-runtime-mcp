@@ -23,11 +23,13 @@ use SinaSaeedi\RuntimeMcp\Tools\Tier;
 beforeEach(function () {
     File::deleteDirectory(app_path('RuntimeMcp'));
     File::deleteDirectory(base_path('stubs'));
+    File::deleteDirectory(base_path(MakeToolCommand::TEST_DIRECTORY)); // 01-39: make-tool writes a test by default
 });
 
 afterEach(function () {
     File::deleteDirectory(app_path('RuntimeMcp'));
     File::deleteDirectory(base_path('stubs'));
+    File::deleteDirectory(base_path(MakeToolCommand::TEST_DIRECTORY));
     AuditLog::clear();
 });
 
@@ -107,7 +109,7 @@ it('MT1 writes a read_sensitive open-world tool from the stub, prints the next s
         ->and($output)->toContain(MakeToolCommand::NEXT)
         ->and($output)->toContain('  1. Add App\RuntimeMcp\Tools\OrderStatusFromErp::class to runtime-mcp.tools in config/runtime-mcp.php.')
         ->and($output)->toContain("  2. Define the Gate: Gate::define('runtime-mcp.order_status_from_erp', fn (Principal|User \$who) => …); // Principal: SinaSaeedi\\RuntimeMcp\\Principal")
-        ->and($output)->toContain(MakeToolCommand::STEP_TEST)
+        ->and($output)->toContain(sprintf(MakeToolCommand::STEP_TEST, 'OrderStatusFromErp'))
         ->and($output)->toContain(MakeToolCommand::CLAIM)
         ->and($output)->toContain('blocks database writes inside the tool on the default connection and on each connection in runtime-mcp.read_only_transactions.connections')
         ->and(str_contains($output, MakeToolCommand::OPEN_WORLD_HINT))->toBeFalse();

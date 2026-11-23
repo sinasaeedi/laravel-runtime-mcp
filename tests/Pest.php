@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use Pest\TestSuite;
 use SinaSaeedi\RuntimeMcp\Plugins\Contracts\Plugin;
-use SinaSaeedi\RuntimeMcp\Tests\Support\ToolContract;
+use SinaSaeedi\RuntimeMcp\Testing\ToolContract;
 use SinaSaeedi\RuntimeMcp\Tests\TestCase;
 use SinaSaeedi\RuntimeMcp\Tools\Contracts\RuntimeTool;
 

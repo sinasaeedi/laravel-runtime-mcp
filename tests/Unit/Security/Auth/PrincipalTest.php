@@ -41,8 +41,8 @@ it('is not a user, and cannot change', function () {
         ->and($class->isFinal())->toBeTrue();
 });
 
-it('has the audit values api_key, stdio and sanctum', function () {
-    expect(array_map(fn (AuthMethod $method): string => $method->value, AuthMethod::cases()))->toBe(['api_key', 'stdio', 'sanctum']);
+it('has the audit values api_key, stdio, sanctum and testing', function () {
+    expect(array_map(fn (AuthMethod $method): string => $method->value, AuthMethod::cases()))->toBe(['api_key', 'stdio', 'sanctum', 'testing']);
 });
 
 // 01-35: the Sanctum principal (and 01-39's asUser()) name a user "user-<id>" in the key-name format.

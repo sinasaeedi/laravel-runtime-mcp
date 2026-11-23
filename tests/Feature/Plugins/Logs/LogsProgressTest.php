@@ -5,11 +5,11 @@ declare(strict_types=1);
 use Carbon\CarbonImmutable;
 use SinaSaeedi\RuntimeMcp\Plugins\Logs\Tools\LogsRecentErrors;
 use SinaSaeedi\RuntimeMcp\Plugins\Logs\Tools\LogsSearch;
+use SinaSaeedi\RuntimeMcp\Testing\SteppingClock;
 use SinaSaeedi\RuntimeMcp\Tests\Support\AuditLog;
 use SinaSaeedi\RuntimeMcp\Tests\Support\Gates;
 use SinaSaeedi\RuntimeMcp\Tests\Support\LogFiles;
 use SinaSaeedi\RuntimeMcp\Tests\Support\ProgressStreams;
-use SinaSaeedi\RuntimeMcp\Tests\Support\SteppingClock;
 
 /*
  * 01-37 Part C (spec 6.9, 6.10, 5.15): logs_search and logs_recent_errors report after each file, over HTTP with a
