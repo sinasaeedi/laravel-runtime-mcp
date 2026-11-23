@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use SinaSaeedi\RuntimeMcp\Audit\Reason;
 use SinaSaeedi\RuntimeMcp\Mcp\EnvelopeSchema;
-use SinaSaeedi\RuntimeMcp\Tests\Support\JsonSchemaSubset;
+use SinaSaeedi\RuntimeMcp\Testing\JsonSchemaSubset;
 use SinaSaeedi\RuntimeMcp\Tools\ResultEnvelope;
 use SinaSaeedi\RuntimeMcp\Tools\ToolOutcome;
 use SinaSaeedi\RuntimeMcp\Tools\ToolResult;

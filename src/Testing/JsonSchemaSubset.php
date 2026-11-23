@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SinaSaeedi\RuntimeMcp\Tests\Support;
+namespace SinaSaeedi\RuntimeMcp\Testing;
 
 use UnexpectedValueException;
 
@@ -11,6 +11,9 @@ use UnexpectedValueException;
  * a list), enum, const, anyOf, minimum, properties, required, additionalProperties: false,
  * description. Enough for EnvelopeSchema (01-08), with no new dev dependency. Any other keyword
  * throws, so the schema cannot grow past what this checks.
+ *
+ * Shipped (01-39): the test kit's assertMatchesOutputSchema() uses it in a team's tests, and the package's own tests
+ * use the same copy. It was tests/Support/JsonSchemaSubset.php, which never reaches a team's vendor/ (export-ignore).
  */
 final class JsonSchemaSubset
 {

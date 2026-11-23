@@ -9,6 +9,7 @@ use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Testing\TestResponse;
 use RuntimeException;
 use SinaSaeedi\RuntimeMcp\Plugins\PluginRegistry;
+use SinaSaeedi\RuntimeMcp\Testing\SteppingClock;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Plugins\ProgressProbePlugin;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Tools\ProgressProbeTool;
 use SinaSaeedi\RuntimeMcp\Tools\ProgressClock;

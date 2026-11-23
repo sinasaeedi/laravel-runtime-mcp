@@ -10,6 +10,7 @@ use LogicException;
 use SinaSaeedi\RuntimeMcp\Mcp\McpToolAdapter;
 use SinaSaeedi\RuntimeMcp\Tools\Tier;
 use Symfony\Component\Console\Formatter\OutputFormatter;
+use Throwable;
 
 /**
  * Spec 7.4 (01-29): scaffolds a custom tool in the app on RuntimeTool, so the guard pipeline applies. It asks for the
@@ -20,8 +21,11 @@ use Symfony\Component\Console\Formatter\OutputFormatter;
  * through Command::fail() (one error line, exit code 1): GeneratorCommand returns false for its own errors, and
  * Command::execute() casts that to exit code 0. handle() keeps the parent's bool|null type; null is exit code 0.
  *
- * No write tier (rule 10): Tier has no write case, and --tier=write_safe gets the v1.13.0 message. 01-39 adds the test
- * file and --no-test.
+ * No write tier (rule 10): Tier has no write case, and --tier=write_safe gets the v1.13.0 message.
+ *
+ * Spec 7.4, 7.5 (01-39): it also writes a test for the new tool that uses the test kit, unless --no-test. Pest or PHPUnit
+ * by Laravel's own make:test rule (TestMakeCommand::usingPest()), each from its stub. The test registers its tool, so it
+ * passes before the tool is in runtime-mcp.tools.
  */
 final class MakeToolCommand extends GeneratorCommand
 {
@@ -29,6 +33,17 @@ final class MakeToolCommand extends GeneratorCommand
 
     /** The stub, relative to the package root and, once published (runtime-mcp-stubs), to the app's base path. */
     public const STUB = 'stubs/runtime-mcp-tool.stub';
+
+    /** The test stubs (01-39), published with the same tag, named as Laravel's own pest.stub and test.stub. */
+    public const TEST_STUB_PEST = 'stubs/runtime-mcp-tool-pest.stub';
+
+    public const TEST_STUB_PHPUNIT = 'stubs/runtime-mcp-tool-test.stub';
+
+    /** Every stub that the runtime-mcp-stubs tag publishes. */
+    public const STUBS = [self::STUB, self::TEST_STUB_PEST, self::TEST_STUB_PHPUNIT];
+
+    /** The folder of the test, relative to the app's base path. The PHPUnit class is Tests\Feature\RuntimeMcp\{Class}Test. */
+    public const TEST_DIRECTORY = 'tests/Feature/RuntimeMcp';
 
     /** One StudlyCase class name: no folder, no namespace, no dash. */
     public const CLASS_PATTERN = '/^[A-Z][A-Za-z0-9]*$/D';
@@ -44,6 +59,11 @@ final class MakeToolCommand extends GeneratorCommand
     public const EXISTS = 'The file %s already exists. Pass --force to replace it.';
 
     public const NOT_WRITTEN = 'The tool file was not written.';
+
+    public const TEST_NOT_WRITTEN = 'The test file was not written.';
+
+    /** %s is the path of the test. */
+    public const TEST_CREATED = 'Test [%s] created successfully.';
 
     public const WRITE_TIER = 'Write tools arrive in v1.13.0, with a human approval for every call.';
 
@@ -72,7 +92,11 @@ final class MakeToolCommand extends GeneratorCommand
     /** %s is the ability. */
     public const STEP_GATE = "  2. Define the Gate: Gate::define('%s', fn (Principal|User \$who) => …); // Principal: SinaSaeedi\\RuntimeMcp\\Principal";
 
-    public const STEP_TEST = '  3. Write a test that calls it through the server.';
+    /** %s is the class: the test is {Class}Test. */
+    public const STEP_TEST = '  3. Run the new test: php artisan test --filter=%sTest.';
+
+    /** Step 3 with --no-test (01-29's text). */
+    public const STEP_WRITE_TEST = '  3. Write a test that calls it through the server.';
 
     /** Spec 5.9 (01-16): the read-only transaction covers only the default connection and the listed ones. */
     public const CLAIM = 'The tier is your claim: the package blocks database writes inside the tool on the default connection and on each connection in runtime-mcp.read_only_transactions.connections (add every other connection the tool uses there), but not HTTP, SOAP, Redis or file writes.';
@@ -84,7 +108,8 @@ final class MakeToolCommand extends GeneratorCommand
     protected $signature = self::NAME.' {name : The class name, for example OrderStatusFromErp}'
         .' {--tier= : read or read_sensitive}'
         .' {--open-world : The tool calls an external system (an API, SOAP, another database)}'
-        .' {--force : Replace the file when it exists}';
+        .' {--force : Replace the files when they exist}'
+        .' {--no-test : Do not write a test for the tool}';
 
     /** @var string */
     protected $description = 'Create a Runtime MCP tool that runs behind the guard pipeline';
@@ -118,9 +143,13 @@ final class MakeToolCommand extends GeneratorCommand
         }
 
         $path = $this->getPath($this->qualifyClass($class));
+        $testPath = $this->option('no-test') === true ? null : $this->laravel->basePath(self::TEST_DIRECTORY."/{$class}Test.php");
 
-        if ($this->option('force') !== true && $this->files->exists($path)) {
-            $this->refuse(sprintf(self::EXISTS, $path));
+        // Both files are checked before anything is asked or written: a refusal leaves no half-made tool.
+        foreach (array_filter([$path, $testPath]) as $file) {
+            if ($this->option('force') !== true && $this->files->exists($file)) {
+                $this->refuse(sprintf(self::EXISTS, $file));
+            }
         }
 
         $this->tier = $this->askTier();
@@ -132,7 +161,11 @@ final class MakeToolCommand extends GeneratorCommand
             $this->refuse(self::NOT_WRITTEN);
         }
 
-        $this->nextSteps($this->qualifyClass($class), $tool);
+        if ($testPath !== null) {
+            $this->writeTest($testPath, $this->qualifyClass($class), $class, $tool);
+        }
+
+        $this->nextSteps($this->qualifyClass($class), $tool, $testPath === null ? null : $class);
 
         return null;
     }
@@ -145,9 +178,47 @@ final class MakeToolCommand extends GeneratorCommand
 
     protected function getStub(): string
     {
-        $published = $this->laravel->basePath(self::STUB);
+        return $this->stubPath(self::STUB);
+    }
 
-        return $this->files->exists($published) ? $published : dirname(__DIR__, 2).'/'.self::STUB;
+    /** The published copy of a stub (runtime-mcp-stubs) when the app has one, else the package's. */
+    private function stubPath(string $stub): string
+    {
+        $published = $this->laravel->basePath($stub);
+
+        return $this->files->exists($published) ? $published : dirname(__DIR__, 2).'/'.$stub;
+    }
+
+    /**
+     * Spec 7.4: the test of the new tool, written after the tool. A failed write is refused (exit 1); the tool file
+     * stays. Laravel's error handler turns the warning of a failed mkdir or write into an ErrorException, so the throw
+     * is the usual failure, and false the rare one.
+     */
+    private function writeTest(string $path, string $qualified, string $class, string $tool): void
+    {
+        $stub = $this->files->get($this->stubPath($this->usesPest() ? self::TEST_STUB_PEST : self::TEST_STUB_PHPUNIT));
+
+        try {
+            $this->files->ensureDirectoryExists(dirname($path));
+            $written = $this->files->put($path, str_replace(['{{ toolClass }}', '{{ class }}', '{{ tool }}'], [$qualified, $class, $tool], $stub));
+        } catch (Throwable) {
+            $written = false;
+        }
+
+        if ($written === false) {
+            $this->refuse(self::TEST_NOT_WRITTEN);
+        }
+
+        $this->components->info(sprintf(self::TEST_CREATED, $path));
+    }
+
+    /**
+     * Laravel's own rule for make:test (TestMakeCommand::usingPest(), 12.69 and 13.36): Pest is loaded and the app has
+     * tests/Pest.php. "Pest is installed" alone is not enough: an app can have Pest and still write PHPUnit classes.
+     */
+    private function usesPest(): bool
+    {
+        return function_exists('Pest\version') && $this->files->exists($this->laravel->basePath('tests/Pest.php'));
     }
 
     /** @param  string  $rootNamespace */
@@ -203,7 +274,8 @@ final class MakeToolCommand extends GeneratorCommand
         return $this->input->isInteractive() && $this->confirm(self::OPEN_WORLD_QUESTION, false);
     }
 
-    private function nextSteps(string $class, string $tool): void
+    /** @param  string|null  $test  the short class name when a test was written, else null (--no-test) */
+    private function nextSteps(string $class, string $tool, ?string $test): void
     {
         $ability = 'runtime-mcp.'.$tool;
 
@@ -211,7 +283,7 @@ final class MakeToolCommand extends GeneratorCommand
         $this->text(self::NEXT);
         $this->text(sprintf(self::STEP_REGISTER, $class));
         $this->text(sprintf(self::STEP_GATE, $ability));
-        $this->text(self::STEP_TEST);
+        $this->text($test === null ? self::STEP_WRITE_TEST : sprintf(self::STEP_TEST, $test));
         $this->text(self::CLAIM);
 
         if (! $this->opensWorld) {

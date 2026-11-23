@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use SinaSaeedi\RuntimeMcp\Security\Redaction\Redactor;
-use SinaSaeedi\RuntimeMcp\Tests\Support\SteppingClock;
+use SinaSaeedi\RuntimeMcp\Testing\SteppingClock;
 use SinaSaeedi\RuntimeMcp\Tools\FiberProgress;
 use SinaSaeedi\RuntimeMcp\Tools\NullProgress;
 use SinaSaeedi\RuntimeMcp\Tools\Progress;

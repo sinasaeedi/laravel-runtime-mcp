@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-namespace SinaSaeedi\RuntimeMcp\Tests\Support;
+namespace SinaSaeedi\RuntimeMcp\Testing;
 
+use Illuminate\Container\Container;
 use Illuminate\JsonSchema\JsonSchema;
 use PHPUnit\Framework\Assert;
 use SinaSaeedi\RuntimeMcp\Mcp\McpToolAdapter;
@@ -12,15 +13,23 @@ use SinaSaeedi\RuntimeMcp\Tools\Contracts\RuntimeTool;
 use Stringable;
 
 /**
- * The tool contract (spec 4.3), checked the same way for every tool from 01-18 on. Call it through
- * assertToolContract() in tests/Pest.php. A broken check fails with the tool name and the check.
+ * The tool contract (spec 4.3), checked the same way for every tool from 01-18 on. A team calls it through
+ * RuntimeMcp::assertToolContract() (01-39); the package's own tests through assertToolContract() in tests/Pest.php.
+ * A broken check fails with the tool name and the check (an AssertionFailedError).
  *
- * Keep every check in this one class: 01-39 moves it to src/Testing/ unchanged.
+ * Keep every check in this one class. 01-39 moved it from tests/Support/ (export-ignored, so never in a team's vendor/)
+ * and added the numeric-rule check for a schema maximum (01-18 triage, Sina 2026-11-03).
  */
 final class ToolContract
 {
     /** The schema keywords that the max: rule enforces (strings, numbers, arrays). */
     private const LIMITS = ['maxLength', 'maximum', 'maxItems'];
+
+    /**
+     * The rules that make max: compare a number (Laravel's Validator::$numericRules, 12.69 and 13.36). Without one,
+     * max:100 compares the length of the text, so 500 passes.
+     */
+    private const NUMERIC_RULES = ['integer', 'numeric', 'decimal'];
 
     /** @param  Plugin|null  $plugin  the tool's plugin, or null for a custom tool (01-29), which has no prefix */
     public static function assert(RuntimeTool $tool, ?Plugin $plugin = null): void
@@ -46,7 +55,7 @@ final class ToolContract
     private static function assertAdapter(RuntimeTool $tool): void
     {
         $name = $tool->name();
-        $adapter = new McpToolAdapter($tool, app());
+        $adapter = new McpToolAdapter($tool, Container::getInstance());
         $suffix = "\n\n".McpToolAdapter::UNTRUSTED;
 
         if (! str_ends_with($adapter->description(), $suffix) || strlen($adapter->description()) <= strlen($suffix)) {
@@ -150,6 +159,29 @@ final class ToolContract
                 self::fail($name, "the rules of [{$key}] say max:{$limit}, but the schema limits it to ".implode(',', $schemaLimits).'.');
             }
         }
+
+        $maximum = $node['maximum'] ?? null;
+
+        if ((is_int($maximum) || is_float($maximum)) && ! self::hasNumericRule($strings)) {
+            self::fail($name, "the schema limits [{$key}] with maximum {$maximum}, but its rules have no integer, numeric or decimal rule, so max: compares the length of the text.");
+        }
+    }
+
+    /**
+     * True when one rule's name (the text before ":", in lower case) is integer, numeric or decimal: integer:strict and
+     * decimal:0,2 count. A rule object is not read (ruleStrings() drops it), so a type checked only in a closure fails.
+     *
+     * @param  list<string>  $strings
+     */
+    private static function hasNumericRule(array $strings): bool
+    {
+        foreach ($strings as $string) {
+            if (in_array(strtolower(trim(explode(':', $string, 2)[0])), self::NUMERIC_RULES, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -48,6 +48,8 @@ function contractHelperBrokenTool(string $case): ContractTool
         'property limit with only <key>.* rules' => new ContractTool('app_fixture', fn (JsonSchema $s): array => ['with' => $s->array()->items($s->string())->max(5)], ['with.*' => 'string']),
         'name without plugin prefix' => new ContractTool('fixture_info', fn (JsonSchema $s): array => [], []),
         'name against the name rule' => new ContractTool('app-info', fn (JsonSchema $s): array => [], []),
+        'maximum without a numeric rule' => new ContractTool('app_fixture', fn (JsonSchema $s): array => ['limit' => $s->integer()->max(100)], ['limit' => ['max:100']]),
+        'nested maximum without a numeric rule' => new ContractTool('app_fixture', fn (JsonSchema $s): array => ['page' => $s->object(fn (JsonSchema $s): array => ['size' => $s->integer()->max(50)])], ['page' => 'array', 'page.size' => 'max:50']),
         default => throw new InvalidArgumentException("Unknown case [{$case}]."),
     };
 }
@@ -104,6 +106,21 @@ it('fails for a broken contract, with the tool name and the check', function (st
     'a property limit with only key.* rules' => ['property limit with only <key>.* rules', 'app_fixture', 'the schema limits [with] to 5, but its rules have no max: rule'],
     'a name without the plugin prefix' => ['name without plugin prefix', 'fixture_info', 'the name does not start with the prefix [app_] of the plugin [core]'],
     'a name that breaks the name rule' => ['name against the name rule', 'app-info', 'the name does not match'],
+    // 01-39 (Sina, 2026-11-03, 01-18 triage): without integer, numeric or decimal, max:100 compares the length of the text.
+    'a schema maximum with no numeric rule' => ['maximum without a numeric rule', 'app_fixture', 'the schema limits [limit] with maximum 100, but its rules have no integer, numeric or decimal rule, so max: compares the length of the text.'],
+    'a nested schema maximum with no numeric rule' => ['nested maximum without a numeric rule', 'app_fixture', 'the schema limits [page.size] with maximum 50, but its rules have no integer, numeric or decimal rule'],
+]);
+
+it('passes for a schema maximum with an integer, numeric or decimal rule (01-39)', function (mixed $rules) {
+    $tool = new ContractTool('app_fixture', fn (JsonSchema $s): array => ['limit' => $s->integer()->max(100)], ['limit' => $rules]);
+
+    expect(contractHelperFailure($tool, new CorePlugin))->toBeNull();
+})->with([
+    'integer' => [['integer', 'max:100']],
+    'numeric' => [['numeric', 'max:100']],
+    'decimal:0,2' => ['decimal:0,2|max:100'],
+    'integer:strict' => [['integer:strict', 'max:100']],
+    'Integer in another case' => [['Integer', 'max:100']],
 ]);
 
 it('throws an AssertionFailedError, so a contract test fails as a test', function () {
