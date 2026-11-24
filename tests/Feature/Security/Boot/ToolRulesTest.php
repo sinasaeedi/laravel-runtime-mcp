@@ -165,6 +165,7 @@ it('TR9 reports a custom tool that cannot be built, or whose listed parts throw,
     expect(toolRulesFlat(...$tools))->toBe([
         ['tools.name', 'error', 'Rule tools.name could not run: RuntimeException.'],
         ['tools.unique', 'error', 'Rule tools.unique could not run: RuntimeException.'],
+        ['tools.reserved', 'error', 'Rule tools.reserved could not run: RuntimeException.'], // 01-40
     ])
         ->and(str_contains(json_encode(toolRulesFlat(...$issues), JSON_THROW_ON_ERROR), 'rmcp_secret'))->toBeFalse();
 })->with([ThrowingConstructorTool::class, ThrowingDescriptionTool::class, ThrowingSchemaTool::class, ThrowingOpensWorldTool::class]);

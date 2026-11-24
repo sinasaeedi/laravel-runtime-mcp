@@ -245,10 +245,12 @@ it('WR14 reports an official tool that cannot be built or listed as rules that c
 })->with([
     'a throwing constructor' => [ThrowingConstructorMcpTool::class, [
         ['tools.unique', 'error', 'Rule tools.unique could not run: RuntimeException.'],
+        ['tools.reserved', 'error', 'Rule tools.reserved could not run: RuntimeException.'], // 01-40
         ['wrapped_tools.description', 'error', 'Rule wrapped_tools.description could not run: RuntimeException.'],
     ]],
     'a throwing schema()' => [ThrowingSchemaMcpTool::class, [
         ['tools.unique', 'error', 'Rule tools.unique could not run: RuntimeException.'],
+        ['tools.reserved', 'error', 'Rule tools.reserved could not run: RuntimeException.'], // 01-40
     ]],
 ]);
 
