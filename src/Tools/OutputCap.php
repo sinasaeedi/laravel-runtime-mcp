@@ -42,15 +42,32 @@ final class OutputCap
 
     public const FLATTENED = 'The result was too large to return as structured data; its JSON was cut after %d of %d bytes. Narrow the request.';
 
+    /** Spec 5.8, 5.17 (01-40): room for the label line, the batch entry and the batch JSON inside execute_tools. */
+    public const CATALOG_MARGIN = 2048;
+
     public function __construct(private readonly Repository $config) {}
 
     /**
-     * The cap in use: output.max_bytes. 01-40 adds the catalog branch here, the one place that decides
-     * (spec 5.8, 5.17).
+     * The cap in use, the one place that decides (spec 5.8, 5.17): output.max_bytes, and with the catalog on the lower
+     * of that and mcp.tool_search.max_output_bytes minus CATALOG_MARGIN, so one inner result fits the execute_tools
+     * batch. Never below MIN_MAX_BYTES: with a tiny batch limit every inner result is too large, laravel/mcp answers
+     * OutputLimitExceeded (rule 11), and doctor warns (01-40).
      */
     public function limit(): int
     {
-        return $this->maxBytes();
+        $catalog = new CatalogSetting($this->config);
+
+        if (! $catalog->enabled()) {
+            return $this->maxBytes();
+        }
+
+        return min($this->maxBytes(), $this->catalogLimit($catalog));
+    }
+
+    /** mcp.tool_search.max_output_bytes minus CATALOG_MARGIN, at least MIN_MAX_BYTES (the doctor check shows it). */
+    public function catalogLimit(CatalogSetting $catalog): int
+    {
+        return max(self::MIN_MAX_BYTES, $catalog->toolSearchMaxOutputBytes() - self::CATALOG_MARGIN);
     }
 
     /** output.max_bytes: an int or a digit string, at least 1,000; anything else gives 100,000 (doctor fails). */
