@@ -50,7 +50,7 @@ it('prints a healthy strict report: the header, a pass line per core check, exit
 
     expect($code)->toBe(0)
         ->and($output)->toContain("Runtime MCP doctor — Runtime Test (production), strict, package {$version}")
-        ->and(substr_count($output, '✓'))->toBe(20) // 17 core checks, the queue plugin's Queues (01-22) and Failed jobs (01-23), and the logs plugin's Logs (01-25)
+        ->and(substr_count($output, '✓'))->toBe(21) // 18 core checks (01-40 Catalog), the queue plugin's Queues (01-22) and Failed jobs (01-23), and the logs plugin's Logs (01-25)
         ->and(str_contains($output, '✗'))->toBeFalse()
         ->and(str_contains($output, '→'))->toBeFalse()
         ->and($output)->toContain('✓ Endpoint')
@@ -59,6 +59,7 @@ it('prints a healthy strict report: the header, a pass line per core check, exit
         ->and($output)->toContain('Statements time out after 5000 ms.')
         ->and($output)->toContain('Read tools run in a read-only transaction on 1 connection.')
         ->and($output)->toContain('120 calls per minute per key; db_query 60 calls per minute; results at most 100000 bytes.')
+        ->and($output)->toContain('The catalog is off: tools/list shows every tool.')
         ->and($output)->toContain('Every check passes.')
         ->and(str_contains($output, '<fg='))->toBeFalse();
 });

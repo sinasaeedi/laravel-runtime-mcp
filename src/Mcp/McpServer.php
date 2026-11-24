@@ -10,6 +10,7 @@ use Laravel\Mcp\Enums\CacheScope;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Attributes\Cacheable;
 use Laravel\Mcp\Server\Contracts\Transport;
+use Laravel\Mcp\Server\Tools\ToolSearch;
 use Laravel\Mcp\Server\Transport\StdioTransport;
 use LogicException;
 use SinaSaeedi\RuntimeMcp\Security\Auth\ApiKey;
@@ -17,6 +18,7 @@ use SinaSaeedi\RuntimeMcp\Security\Auth\AuthMethod;
 use SinaSaeedi\RuntimeMcp\Security\Auth\CurrentPrincipal;
 use SinaSaeedi\RuntimeMcp\Security\Auth\PrincipalResolver;
 use SinaSaeedi\RuntimeMcp\Server\RuntimeServer;
+use SinaSaeedi\RuntimeMcp\Tools\CatalogSetting;
 
 /**
  * The only subclass of laravel/mcp's Server. Built per request by Registrar::startServer().
@@ -48,7 +50,9 @@ final class McpServer extends Server
         $this->version = $definition->version();
         $this->instructions = $definition->instructions();
         $tools = McpToolAdapters::fromDefinition($definition, $container);
-        $this->tools = $tools;
+        // Spec 4.2, 5.17 (01-40): only the operator's catalog switch puts the tools behind search_tools and
+        // execute_tools. ServerContext::tools() then builds a ToolSearch with `new` and lists only the two meta-tools.
+        $this->tools = (new CatalogSetting($config))->enabled() ? [ToolSearch::class => $tools] : $tools;
         $this->prompts = McpPromptAdapters::fromDefinition($definition, $container, McpToolAdapters::byName($tools));
         $this->capabilities = [
             self::CAPABILITY_TOOLS => ['listChanged' => false],

@@ -34,6 +34,7 @@ use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ReadOnlyConnection;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\SanctumInstalled;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ToolClasses;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ToolNames;
+use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ToolsReserved;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ToolsUnique;
 use Throwable;
 
@@ -50,7 +51,7 @@ final class BootValidator
      * The core rules, in run order. 01-35 added auth.driver and auth.sanctum.installed; the 01-02 review
      * added environment.name; 01-29 added tools.* before 01-36's prompts.* (a custom prompt may need a custom
      * tool); 01-38 added wrapped_tools.* after tools.* and before prompts.* (a custom prompt may need a wrapped tool,
-     * 01-36). The wrapped_tools.* rules live in src/Mcp/Wrapped/Rules/: they read laravel/mcp classes.
+     * 01-36); 01-40 added tools.reserved after tools.unique. The wrapped_tools.* rules live in src/Mcp/Wrapped/Rules/: they read laravel/mcp classes.
      */
     public const RULES = [
         ApiKeysPresent::class,
@@ -63,6 +64,7 @@ final class BootValidator
         ToolClasses::class, // 01-29
         ToolNames::class,
         ToolsUnique::class,
+        ToolsReserved::class, // 01-40
         WrappedToolEntries::class, // 01-38
         WrappedToolClasses::class,
         WrappedToolNames::class,

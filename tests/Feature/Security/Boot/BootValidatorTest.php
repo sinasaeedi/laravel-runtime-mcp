@@ -29,6 +29,7 @@ use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ReadOnlyConnection;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\SanctumInstalled;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ToolClasses;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ToolNames;
+use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ToolsReserved;
 use SinaSaeedi\RuntimeMcp\Security\Boot\Rules\ToolsUnique;
 use SinaSaeedi\RuntimeMcp\Security\BootValidator;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Boot\FailingRule;
@@ -80,6 +81,7 @@ it('lists the core rules of v1.0.0, in order', function () {
         ToolClasses::class, // 01-29
         ToolNames::class,
         ToolsUnique::class,
+        ToolsReserved::class, // 01-40
         WrappedToolEntries::class, // 01-38
         WrappedToolClasses::class,
         WrappedToolNames::class,

@@ -11,6 +11,7 @@ use SinaSaeedi\RuntimeMcp\Doctor\Checks\AllowedHosts;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\AllowedOrigins;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\AuditLog;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\BootRules;
+use SinaSaeedi\RuntimeMcp\Doctor\Checks\Catalog;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\Endpoint;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\Limits;
 use SinaSaeedi\RuntimeMcp\Doctor\Checks\LinkedUsers;
@@ -40,7 +41,7 @@ final class Doctor
      * The core checks, in report order. 01-13 added ReadOnlyRolePrivileges (spec 5.1); 01-35 put
      * Sanctum where 01-12's AuthDriver was (the auth.driver boot rule now reports a bad driver in Boot
      * rules); 01-14 appended StatementTimeout, 01-16 ReadOnlyTransactionConnections, the 01-14 re-review
-     * ReadOnlyConnectionOptions, 01-17 Limits. Later stories append: 01-40 (Catalog).
+     * ReadOnlyConnectionOptions, 01-17 Limits, 01-40 Catalog.
      */
     public const CHECKS = [
         Endpoint::class,
@@ -60,6 +61,7 @@ final class Doctor
         ReadOnlyTransactionConnections::class,
         ReadOnlyConnectionOptions::class,
         Limits::class,
+        Catalog::class,
     ];
 
     /** @param  list<class-string<Check>>  $checks */
