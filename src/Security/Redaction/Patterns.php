@@ -30,11 +30,14 @@ final class Patterns
         'openai_key' => '/\bsk-[A-Za-z0-9_-]{20,}/',
         // This package's own keys: rmcp_ + base64url (spec 5.3, 01-06).
         'runtime_mcp_key' => '/\brmcp_[A-Za-z0-9_-]{32,}/',
-        // Any other token after "Bearer". "|" is in the class: a Sanctum token is "<id>|<token>".
-        'bearer' => '/\bbearer\s+\K[A-Za-z0-9._~+\/=|-]{8,}/i',
+        // Any other token after "Bearer". "|" is in the class: a Sanctum token is "<id>|<token>". A "/" of the token
+        // inside JSON text with escaped slashes is "\/" (or "\\\/" when encoded again): backslashes only before a "/",
+        // so the "\" of a following "\"" stays (01-30 triage).
+        'bearer' => '/\bbearer\s+\K(?:[A-Za-z0-9._~+\/=|-]|\\\\+\/){8,}/i',
         // The password in scheme://user:pass@host. The user may be empty (redis://:pass@host), and the
         // user and the password may hold "@": the greedy class ends at the last "@" before the host.
-        // ":\/\/" is the "://" of a URL inside JSON text with escaped slashes.
-        'password' => '/\b[a-z][a-z0-9+.-]*:(?:\\\\?\/){2}[^\s:\/?#]*:\K[^\s\/?#]+(?=@)/i',
+        // ":\/\/" is the "://" of a URL inside JSON text with escaped slashes, and ":\\/\\/" the same text encoded
+        // again (JSON text used as a key of a JSON log context, 01-30): any number of backslashes before each "/".
+        'password' => '/\b[a-z][a-z0-9+.-]*:(?:\\\\*\/){2}[^\s:\/?#]*:\K[^\s\/?#]+(?=@)/i',
     ];
 }
