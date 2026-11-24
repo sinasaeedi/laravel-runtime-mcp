@@ -31,10 +31,16 @@ final readonly class RedactedEntry
 
     public static function of(LogEntry $entry, Redactor $redactor): self
     {
+        $message = $redactor->redactString($entry->message);
         $context = $entry->context;
 
         if (is_string($context)) {
-            $context = $redactor->redactString($context);
+            // A string context is the rest of the entry's text (the lines under its header line, LogEntryParser), so
+            // a secret across that line break (a PEM block in a message) matches only in the whole text: redact the
+            // whole text. The context is its part after the redacted message; with no such part (a marker across the
+            // break), the context is the whole redacted text (01-30 triage).
+            $whole = $redactor->redactString($entry->message."\n".$context);
+            $context = str_starts_with($whole, $message."\n") ? substr($whole, strlen($message) + 1) : $whole;
         } elseif (is_array($context)) {
             $values = $redactor->redact($context);
             assert(is_array($values));
@@ -45,7 +51,7 @@ final readonly class RedactedEntry
             $context = $whole === $json ? $values : $whole;
         }
 
-        return new self($entry, $redactor->redactString($entry->message), $context);
+        return new self($entry, $message, $context);
     }
 
     /** Case-insensitive, in the redacted message or the redacted context (an array: its JSON). */

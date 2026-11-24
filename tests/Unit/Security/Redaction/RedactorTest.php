@@ -10,10 +10,12 @@ use SinaSaeedi\RuntimeMcp\Security\Redaction\Redactor;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Redaction\SampleStatus;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Redaction\SampleSuit;
 use SinaSaeedi\RuntimeMcp\Tests\Fixtures\Redaction\SelfSerializing;
+use SinaSaeedi\RuntimeMcp\Tests\Support\SecretSamples;
 
 /*
  * Every secret sample is fake and built by concatenation, so GitHub push protection never sees a
- * whole key in the source. Pest test-file functions are global, so each helper name says "redaction".
+ * whole key in the source (the samples live in tests/Support/SecretSamples.php since 01-30). Pest test-file functions
+ * are global, so each helper name says "redaction".
  */
 
 /** A redactor over runtime-mcp.redaction.extra_patterns = $extra, without the container. */
@@ -24,50 +26,18 @@ function redactionEngine(mixed $extra = []): Redactor
 
 function redactionJwt(): string
 {
-    return 'eyJ'.'hbGciOiJIUzI1NiJ9.'.'eyJ'.'zdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+    return SecretSamples::jwt();
 }
 
 function redactionPem(string $kind, bool $withEnd = true): string
 {
-    $block = '-----BEGIN '.$kind.' PRIVATE KEY-----'."\nMIIEowIBAAKCAQEAfakefakefake\nZmFrZWZha2U=\n";
-
-    return $withEnd ? $block.'-----END '.$kind.' PRIVATE KEY-----' : $block;
+    return SecretSamples::pem($kind, $withEnd);
 }
 
-/** @return array<string, array{string, string}> input => exact output, one row per built-in pattern and form */
+/** @return array<string, array{string, string}> input => exact output, one row per built-in pattern and form (01-30 moved them to SecretSamples) */
 function redactionBuiltInSamples(): array
 {
-    $sanctum = '7|'.str_repeat('Ab3x', 10).'8cdc1683';
-
-    return [
-        'private_key: RSA block' => ['key: '.redactionPem('RSA').' tail', 'key: [redacted:private_key] tail'],
-        'jwt' => ['token='.redactionJwt().'; next', 'token=[redacted:jwt]; next'],
-        'aws_access_key: AKIA' => ['id AKIA'.'IOSFODNN7EXAMPLE end', 'id [redacted:aws_access_key] end'],
-        'aws_access_key: ASIA' => ['id ASIA'.'IOSFODNN7EXAMPLE end', 'id [redacted:aws_access_key] end'],
-        'stripe_key: sk_live_' => ['stripe sk_'.'live_'.str_repeat('0', 24).' failed', 'stripe [redacted:stripe_key] failed'],
-        'stripe_key: rk_live_' => ['rk_'.'live_'.str_repeat('0', 24), '[redacted:stripe_key]'],
-        'github_token: ghp_' => ['gh'.'p_'.str_repeat('A', 36), '[redacted:github_token]'],
-        'github_token: gho_' => ['gh'.'o_'.str_repeat('B', 36), '[redacted:github_token]'],
-        'github_token: ghs_' => ['gh'.'s_'.str_repeat('C', 36), '[redacted:github_token]'],
-        'github_token: github_pat_' => ['github'.'_pat_'.str_repeat('A', 22).'_'.str_repeat('b', 59), '[redacted:github_token]'],
-        'slack_token' => ['slack xox'.'b-1234567890-abcdefghij ok', 'slack [redacted:slack_token] ok'],
-        'anthropic_key' => ['sk-'.'ant-api03-'.str_repeat('a', 40), '[redacted:anthropic_key]'],
-        'openai_key: sk-proj-' => ['sk-'.'proj-'.str_repeat('b', 40), '[redacted:openai_key]'],
-        'openai_key: sk-' => ['key sk-'.str_repeat('c', 48), 'key [redacted:openai_key]'],
-        'openai_key: after a hyphen (accepted)' => ['task-sk-'.'abcdefghijklmnopqrstuv', 'task-[redacted:openai_key]'],
-        'runtime_mcp_key' => ['leaked rmcp_'.str_repeat('Q', 43), 'leaked [redacted:runtime_mcp_key]'],
-        'bearer: opaque token' => ['Authorization: Bearer 3f9a8c7e6d5b4a3f2e1d', 'Authorization: Bearer [redacted:bearer]'],
-        'bearer: Sanctum token' => ['Authorization: Bearer '.$sanctum, 'Authorization: Bearer [redacted:bearer]'],
-        'bearer: lower case, JSON header' => ['{"authorization":"bearer abcdefgh12"}', '{"authorization":"bearer [redacted:bearer]"}'],
-        'bearer: an English word (accepted)' => ['Missing Bearer authentication header', 'Missing Bearer [redacted:bearer] header'],
-        'password: user and password' => ['postgres://app:s3cr3t@db.internal:5432/app', 'postgres://app:[redacted:password]@db.internal:5432/app'],
-        'password: empty user' => ['redis://:s3cr3tpass@redis.internal:6379', 'redis://:[redacted:password]@redis.internal:6379'],
-        'password: holds @' => ['mysql://app:p@ss@db/app', 'mysql://app:[redacted:password]@db/app'],
-        'password: only the URL, not a later email' => ['http://a:b@c and mail x@y.z', 'http://a:[redacted:password]@c and mail x@y.z'],
-        'password: user holds @ (an email)' => ['smtp://postmaster@mg.example.com:s3cret@smtp.example.org:587', 'smtp://postmaster@mg.example.com:[redacted:password]@smtp.example.org:587'],
-        'password: user holds @ (user@server)' => ['pgsql://app@myserver:s3cret@myserver.example.net/app', 'pgsql://app@myserver:[redacted:password]@myserver.example.net/app'],
-        'password: JSON text with escaped slashes' => ['{"smtp":"smtp:\/\/app:s3cret@mail.internal:587"}', '{"smtp":"smtp:\/\/app:[redacted:password]@mail.internal:587"}'],
-    ];
+    return SecretSamples::builtIn();
 }
 
 /** @return array<string, array{string}> text that must stay exactly as it is (spec 11.2, rule 13) */

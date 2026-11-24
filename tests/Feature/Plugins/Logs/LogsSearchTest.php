@@ -516,3 +516,25 @@ it('LS25 redacts the keys of a JSON context too, so a secret used as a key is ne
         ->and($entries[1]['context'])->toMatch('/…\[cut \d+ bytes\]$/u')
         ->and($probe)->toMatchArray(['status' => 'empty', 'note' => 'No match in app-json.log.']);
 });
+
+it('LS26 redacts a secret across the first line break of a line-format entry: the message and the lines under it are one text (01-30 triage)', function () {
+    logsSearchServe();
+    $body = 'MIIEowIBAAKCAQEAfakefakefake';
+    $token = 'Qz9XkLmNoPqRsTuVwXyZ01';
+    LogFiles::write('app.log', [
+        LogFiles::line('2026-10-02 09:00:00', 'error', "Loaded key: -----BEGIN RSA PRIVATE KEY-----\n{$body}\nZmFrZWZha2U=\n-----END RSA PRIVATE KEY----- done"),
+        LogFiles::line('2026-10-02 09:01:00', 'error', "Upstream refused Authorization: Bearer\n{$token}"),
+        LogFiles::line('2026-10-02 09:02:00', 'error', "Plain message\n#0 trace line"),
+    ]);
+
+    $response = FixtureTools::call(LogFiles::TOOL)->getContent();
+    $entries = logsSearchEntries(logsSearch());
+    $probe = logsSearch(['contains' => $body]);
+
+    expect($response)->not->toContain($body)
+        ->and($response)->not->toContain('ZmFrZWZha2U=')
+        ->and($response)->not->toContain($token)
+        ->and(array_column($entries, 'message'))->toBe(['Plain message', 'Upstream refused Authorization: Bearer', 'Loaded key: [redacted:private_key]'])
+        ->and(array_column($entries, 'context'))->toBe(['#0 trace line', '[redacted:bearer]', 'Loaded key: [redacted:private_key] done'])
+        ->and($probe)->toMatchArray(['status' => 'empty']);
+});
