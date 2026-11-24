@@ -127,6 +127,17 @@ final class Order extends Model
         return $this->belongsTo(User::class, 'number', 'api_token');
     }
 
+    /**
+     * 01-30: sorts on users.password, which masked_columns hides. Its keys are readable, so model_show's own checks
+     * let it through, and the database refuses its query in frame 2 (PostgreSQL 42501, MySQL 1143).
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function customerSortedBySecret(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id')->orderBy('password');
+    }
+
     public function getDisplayTotalAttribute(): string
     {
         return 'EUR '.$this->total;
