@@ -84,7 +84,7 @@ jobs:
           php-version: '8.2'
           extensions: curl, mbstring, pdo_sqlite, pdo_pgsql, pdo_mysql, sockets
           coverage: none
-      # The Laravel 12 floor (^12.69.0) is the first 12.x release with no security advisory:
+      # The Laravel 12 floor (^12.71.0) is the first 12.x release with no security advisory (CVE-2026-128083):
       # Composer 2.9+ will not install an insecure version, so a lower floor could not be proved here.
       # composer.json also sets a dev floor for guzzlehttp/promises (^2.0.3): with Composer < 2.9,
       # --prefer-lowest picks 1.5.3, whose PromiseInterface::wait() does not match Laravel's FluentPromise.
